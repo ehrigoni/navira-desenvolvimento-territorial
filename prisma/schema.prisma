@@ -1,0 +1,215 @@
+// Schema do NAVIRA (MVP). Base: docs/porto/indicadores.prisma, docs/navegante/relacoes-meus-portos.md,
+// docs/entrada/ESPECIFICACAO_RECUPERACAO_SENHA.md e docs/entrada/fix-login-servidor.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Papel {
+  NAVEGANTE
+  PORTO
+}
+
+enum EthosStatus {
+  NAO_INICIADO
+  EM_ANDAMENTO
+  CONCLUIDO
+}
+
+enum TipoPorto {
+  IGREJA
+  ESCOLA
+  ASSOCIACAO
+  INICIATIVA
+  OUTRO
+}
+
+enum StatusCandidatura {
+  ESCOLHIDA
+  CANDIDATADA
+  ENTREVISTADA
+  CONTRATADA
+  RECUSADA
+}
+
+enum Modalidade {
+  PRESENCIAL
+  REMOTA
+  HIBRIDA
+}
+
+model Usuario {
+  id                        String     @id @default(cuid())
+  nome                      String
+  email                     String?    @unique
+  telefone                  String?    @unique
+  senhaHash                 String
+  papel                     Papel
+  ethosStatus               EthosStatus @default(NAO_INICIADO)
+
+  // Recuperação de senha. O token é guardado como hash SHA-256; o original só vai ao usuário.
+  tokenRecuperacao          String?    @unique
+  expiracaoTokenRecuperacao DateTime?
+  recuperacaoJanelaInicio   DateTime?
+  recuperacoesNaJanela      Int        @default(0)
+
+  ultimoLoginEm             DateTime?
+  criadoEm                  DateTime   @default(now())
+  atualizadoEm              DateTime   @updatedAt
+
+  navegante                 Navegante?
+  porto                     Porto?
+}
+
+/// Pessoa que busca inserção (Navegante). Ligada a um usuário.
+model Navegante {
+  id          String   @id @default(cuid())
+  usuarioId   String   @unique
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  cep         String?
+  portos      InscricaoPorto[]
+  vagas       VagaNavegante[]
+  cursos      CursoNavegante[]
+  contratacoes Contratacao[]
+}
+
+/// Território/organização (igreja, escola, associação, iniciativa). Tem CEP.
+model Porto {
+  id          String     @id @default(cuid())
+  usuarioId   String?    @unique
+  usuario     Usuario?   @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  nome        String
+  tipo        TipoPorto  @default(OUTRO)
+  cep         String
+  logradouro  String?
+  numero      String?
+  bairro      String?
+  cidade      String
+  uf          String     @db.Char(2)
+  criadoEm    DateTime   @default(now())
+  inscritos   InscricaoPorto[]
+  empresas    EmpresaPorto[]
+
+  @@index([cidade, uf])
+}
+
+model InscricaoPorto {
+  naveganteId String
+  navegante   Navegante @relation(fields: [naveganteId], references: [id], onDelete: Cascade)
+  portoId     String
+  porto       Porto     @relation(fields: [portoId], references: [id], onDelete: Cascade)
+  criadoEm    DateTime  @default(now())
+
+  @@id([naveganteId, portoId])
+}
+
+/// Empresa que oferece vagas (Destino). Tem CEP e CNAE.
+model Destino {
+  id          String   @id @default(cuid())
+  razaoSocial String
+  cnpj        String?  @unique
+  cnae        String?
+  cep         String
+  cidade      String
+  uf          String   @db.Char(2)
+  criadoEm    DateTime @default(now())
+  vagas       Vaga[]
+  contratacoes Contratacao[]
+  portos      EmpresaPorto[]
+  cursos      Curso[]
+
+  @@index([cidade, uf])
+}
+
+/// Empresa desenvolve portos (N—N).
+model EmpresaPorto {
+  destinoId String
+  destino   Destino @relation(fields: [destinoId], references: [id], onDelete: Cascade)
+  portoId   String
+  porto     Porto   @relation(fields: [portoId], references: [id], onDelete: Cascade)
+
+  @@id([destinoId, portoId])
+}
+
+model Vaga {
+  id          String   @id @default(cuid())
+  destinoId   String
+  destino     Destino  @relation(fields: [destinoId], references: [id], onDelete: Cascade)
+  titulo      String
+  descricao   String?
+  salario     Decimal? @db.Decimal(12, 2)
+  cidade      String?
+  uf          String?  @db.Char(2)
+  ativa       Boolean  @default(true)
+  publicadaEm DateTime @default(now())
+  navegantes  VagaNavegante[]
+  requisitos  VagaCurso[]
+  contratacoes Contratacao[]
+
+  @@index([ativa])
+}
+
+model Curso {
+  id           String    @id @default(cuid())
+  titulo       String
+  descricao    String?
+  cargaHoraria Int?
+  modalidade   Modalidade @default(PRESENCIAL)
+  instituicao  String?
+  destinoId    String?
+  destino      Destino?  @relation(fields: [destinoId], references: [id], onDelete: SetNull)
+  vagas        VagaCurso[]
+  navegantes   CursoNavegante[]
+}
+
+model VagaCurso {
+  vagaId  String
+  vaga    Vaga  @relation(fields: [vagaId], references: [id], onDelete: Cascade)
+  cursoId String
+  curso   Curso @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+
+  @@id([vagaId, cursoId])
+}
+
+model VagaNavegante {
+  naveganteId String
+  navegante   Navegante        @relation(fields: [naveganteId], references: [id], onDelete: Cascade)
+  vagaId      String
+  vaga        Vaga             @relation(fields: [vagaId], references: [id], onDelete: Cascade)
+  status      StatusCandidatura @default(ESCOLHIDA)
+  statusEm    DateTime?
+
+  @@id([naveganteId, vagaId])
+}
+
+model CursoNavegante {
+  naveganteId String
+  navegante   Navegante @relation(fields: [naveganteId], references: [id], onDelete: Cascade)
+  cursoId     String
+  curso       Curso     @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+  realizado   Boolean   @default(false)
+
+  @@id([naveganteId, cursoId])
+}
+
+/// Inserção de um Navegante no mercado de trabalho (base dos indicadores).
+model Contratacao {
+  id          String    @id @default(cuid())
+  naveganteId String
+  navegante   Navegante @relation(fields: [naveganteId], references: [id], onDelete: Cascade)
+  vagaId      String?
+  vaga        Vaga?     @relation(fields: [vagaId], references: [id], onDelete: SetNull)
+  destinoId   String
+  destino     Destino   @relation(fields: [destinoId], references: [id])
+  inicio      DateTime
+  fim         DateTime?
+  salario     Decimal?  @db.Decimal(12, 2)
+  criadoEm    DateTime  @default(now())
+
+  @@index([naveganteId])
+  @@index([destinoId])
+}

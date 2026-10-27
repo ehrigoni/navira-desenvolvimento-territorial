@@ -1,0 +1,158 @@
+/* Tokens da marca (docs/marca/Design-System-Navira.md) */
+:root {
+  --azul: #0b3d5c;
+  --azul-medio: #1f5c7a;
+  --verde: #4bae9f;
+  --dourado: #c9a55c;
+  --branco: #f7f7f5;
+  --tinta: #1d1d1d;
+  --cinza: #6b7280;
+  --borda: #e3e6e8;
+  --erro: #b42318;
+  --erro-fundo: #fdecea;
+  --sucesso: #14785f;
+  --sucesso-fundo: #e6f5f1;
+  --espaco-xs: 8px;
+  --espaco-sm: 12px;
+  --espaco-md: 16px;
+  --espaco-lg: 24px;
+  --espaco-xl: 32px;
+  --espaco-xxl: 48px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  background: var(--branco);
+  color: var(--tinta);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--azul-medio); }
+
+.cabecalho {
+  background: var(--azul);
+  color: var(--branco);
+  padding: var(--espaco-md) var(--espaco-lg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cabecalho a, .cabecalho span { color: var(--branco); text-decoration: none; }
+.marca { font-weight: 700; letter-spacing: 0.08em; }
+.marca::after { content: " ~"; color: var(--verde); }
+
+main.conteudo {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: var(--espaco-xl) var(--espaco-lg) var(--espaco-xxl);
+}
+
+main.central {
+  max-width: 420px;
+  margin: var(--espaco-xxl) auto;
+  padding: 0 var(--espaco-lg);
+}
+
+h1 { color: var(--azul); font-size: 1.9rem; margin: 0 0 var(--espaco-sm); }
+h2 { color: var(--azul-medio); font-size: 1.2rem; margin: var(--espaco-xl) 0 var(--espaco-md); }
+
+.subtitulo { color: var(--cinza); margin: 0 0 var(--espaco-lg); }
+
+.cartao {
+  background: #fff;
+  border: 1px solid var(--borda);
+  border-radius: 12px;
+  padding: var(--espaco-lg);
+  margin-bottom: var(--espaco-md);
+}
+
+.grade-escolha {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--espaco-md);
+}
+
+.escolha {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  border-top: 4px solid var(--verde);
+}
+
+.escolha.porto { border-top-color: var(--dourado); }
+.escolha h3 { margin: 0 0 var(--espaco-xs); color: var(--azul); }
+.escolha p { margin: 0; color: var(--cinza); }
+
+.formulario { display: grid; gap: var(--espaco-md); }
+
+.campo { display: grid; gap: 6px; }
+.campo label { font-weight: 600; color: var(--azul); font-size: 0.95rem; }
+.campo input, .campo select {
+  font: inherit;
+  padding: 10px 12px;
+  border: 1px solid #c7ced3;
+  border-radius: 8px;
+  background: #fff;
+}
+.campo input:focus, .campo select:focus {
+  outline: 2px solid var(--verde);
+  outline-offset: 1px;
+}
+.campo.invalido input { border-color: var(--erro); }
+
+.ajuda { color: var(--cinza); font-size: 0.85rem; }
+.erro-campo { color: var(--erro); font-size: 0.875rem; margin: 0; }
+
+.alerta {
+  padding: var(--espaco-sm) var(--espaco-md);
+  border-radius: 8px;
+  margin: 0;
+}
+.alerta.erro { background: var(--erro-fundo); color: var(--erro); }
+.alerta.sucesso { background: var(--sucesso-fundo); color: var(--sucesso); }
+
+.opcoes { display: flex; gap: var(--espaco-md); flex-wrap: wrap; }
+.opcoes label { display: flex; gap: 6px; align-items: center; }
+
+.botao {
+  font: inherit;
+  font-weight: 600;
+  background: var(--azul);
+  color: var(--branco);
+  border: 0;
+  border-radius: 8px;
+  padding: 12px 18px;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+}
+.botao:hover { background: var(--azul-medio); }
+.botao:disabled { opacity: 0.6; cursor: wait; }
+.botao.secundario { background: transparent; color: var(--azul); border: 1px solid var(--azul); }
+.botao.secundario:hover { background: #fff; }
+
+.links { display: flex; justify-content: space-between; gap: var(--espaco-md); flex-wrap: wrap; font-size: 0.95rem; }
+
+ul.lista { list-style: none; padding: 0; margin: 0; }
+ul.lista li {
+  border-top: 1px solid var(--borda);
+  padding: var(--espaco-sm) 0;
+}
+ul.lista li:first-child { border-top: 0; }
+.destaque { color: var(--verde); font-weight: 600; }
+.vazio { color: var(--cinza); }
+.tag {
+  display: inline-block;
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--sucesso-fundo);
+  color: var(--sucesso);
+  margin-left: 6px;
+}
