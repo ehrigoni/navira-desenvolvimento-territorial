@@ -1,5 +1,13 @@
 :root {
   color-scheme: light;
+  /* Nomes oficiais do manual de marca (docs/marca). */
+  --navira-blue-900: #0b3d5c;
+  --navira-blue-700: #1f5c7a;
+  --navira-green-600: #4bae9f;
+  --navira-green-500: #4bae9f;
+  --navira-gold-500: #c9a55c;
+  --navira-white: #f7f7f5;
+  --navira-ink: #1d1d1d;
   --azul: #0b3d5c;
   --azul-medio: #1f5c7a;
   --verde: #4bae9f;
@@ -41,7 +49,7 @@ a { color: var(--azul-medio); text-underline-offset: 3px; }
 a:hover { color: var(--azul); }
 
 :focus-visible {
-  outline: 3px solid var(--verde);
+  outline: 3px solid var(--azul-medio);
   outline-offset: 3px;
 }
 
@@ -173,15 +181,15 @@ p { margin-top: 0; }
 }
 .campo textarea:focus {
   outline: none;
-  border-color: var(--verde);
-  box-shadow: 0 0 0 3px rgb(75 174 159 / 18%);
+  border-color: var(--azul-medio);
+  box-shadow: 0 0 0 3px rgb(31 92 122 / 18%);
 }
 .campo input:hover, .campo select:hover { border-color: var(--azul-medio); }
 .campo textarea:hover { border-color: var(--azul-medio); }
 .campo input:focus, .campo select:focus {
   outline: none;
-  border-color: var(--verde);
-  box-shadow: 0 0 0 3px rgb(75 174 159 / 18%);
+  border-color: var(--azul-medio);
+  box-shadow: 0 0 0 3px rgb(31 92 122 / 18%);
 }
 .campo.invalido input { border-color: var(--erro); }
 .campo.invalido input:focus { box-shadow: 0 0 0 3px rgb(180 35 24 / 14%); }
@@ -222,7 +230,7 @@ p { margin-top: 0; }
   box-shadow: inset 0 -3px 0 var(--verde);
 }
 .opcoes-papel .opcao-papel:focus-within {
-  outline: 3px solid var(--verde);
+  outline: 3px solid var(--azul-medio);
   outline-offset: 3px;
 }
 .opcao-papel-input {
