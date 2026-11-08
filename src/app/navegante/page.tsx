@@ -118,7 +118,7 @@ export default async function PainelNavegante({
       </header>
 
       <div className="acao-editar-ethos">
-        <Link className="botao secundario" href="/navegante/ethos">Editar Ethos</Link>
+        <Link className="botao" href="/navegante/ethos">Editar Ethos</Link>
       </div>
 
       <section className="cartao painel-portos">
