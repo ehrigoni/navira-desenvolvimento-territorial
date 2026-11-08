@@ -67,6 +67,7 @@ export default function CadastroForm({ papelInicial }: { papelInicial: "NAVEGANT
 
       {papel === "PORTO" && (
         <>
+          <p className="ajuda">Ao criar a conta, será gerada uma cobrança de R$ 1.300,00 por uma vaga. Após o pagamento, a assinatura será ativada e a vaga poderá ser usada ou doada.</p>
           <div className={`campo ${e.nomePorto ? "invalido" : ""}`}>
             <label htmlFor="nomePorto">Nome do porto</label>
             <input id="nomePorto" name="nomePorto" defaultValue={c.nomePorto} placeholder="Ex.: Associação de Moradores Vila X" />

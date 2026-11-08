@@ -382,14 +382,16 @@ a.ethos-navegacao-item:hover { background: #f3f8f8; border-color: var(--azul-med
 }
 
 .botao {
-  min-height: 48px;
+  min-height: 40px;
   font: inherit;
+  font-size: 0.95rem;
+  line-height: 1.4;
   font-weight: 600;
   background: var(--azul);
   color: var(--branco);
   border: 1px solid var(--azul);
   border-radius: 9px;
-  padding: 11px 20px;
+  padding: 8px 16px;
   cursor: pointer;
   text-align: center;
   text-decoration: none;
@@ -457,7 +459,6 @@ a.ethos-navegacao-item:hover { background: #f3f8f8; border-color: var(--azul-med
 }
 
 .painel-cabecalho .subtitulo { margin-bottom: 0; }
-.painel-cabecalho .botao-sair, .acao-editar-ethos .botao { height: 50px; }
 .painel-cabecalho .botao-sair { background: var(--verde); border-color: var(--verde); color: var(--tinta); }
 .painel-cabecalho .botao-sair:hover { background: #5fbfb0; border-color: #5fbfb0; color: var(--tinta); }
 .acao-editar-ethos { margin: calc(-1 * var(--espaco-md)) 0 var(--espaco-xl); }
@@ -470,6 +471,10 @@ a.ethos-navegacao-item:hover { background: #f3f8f8; border-color: var(--azul-med
 .cartao h2:first-child { margin-top: 0; }
 .descricao-vaga { margin: var(--espaco-xs) 0 0; }
 .vazio-sem-margem { margin: 0; }
+
+@media (pointer: coarse) {
+  .botao { min-height: 44px; }
+}
 
 @media (max-width: 540px) {
   .cabecalho { min-height: 64px; padding: 12px 20px; }
@@ -527,3 +532,5 @@ a.ethos-navegacao-item:hover { background: #f3f8f8; border-color: var(--azul-med
 .acoes-porto { display: flex; flex-wrap: wrap; gap: var(--espaco-sm); margin-top: var(--espaco-sm); }
 .formulario-linha { display: flex; flex-wrap: wrap; align-items: center; gap: var(--espaco-xs); margin-top: var(--espaco-xs); }
 .formulario-linha input { width: 6rem; }
+.formulario-recolhivel { margin-top: var(--espaco-lg); }
+.formulario-recolhivel > div > .botao { margin-top: var(--espaco-md); }

@@ -26,6 +26,22 @@ Logins de demonstração: navegante `(11) 91234-5678`, porto `porto@exemplo.com.
 | Modelo de dados | `docs/porto/indicadores.prisma`, `relacoes-meus-portos.md` | Parcial (ver abaixo) |
 | Identidade visual | `docs/marca/Design-System-Navira.md` | Cores e tipografia |
 
+### Vagas e apadrinhamento de portos
+
+Ao cadastrar um porto, é criada uma cobrança pendente de uma vaga para ele. Cada vaga custa R$ 1.300,00 e gera um crédito de contratação para o porto beneficiário após a confirmação do pagamento. Um porto pode comprar várias vagas para si ou para outro porto e também transferir créditos disponíveis para outros portos. A primeira compra após o vencimento ativa a assinatura do pagador por um ano, mesmo quando o beneficiário é outro porto. Créditos disponíveis podem ser usados sem assinatura ativa.
+
+No painel do Porto, a busca adiciona portos a uma lista persistente de possíveis beneficiários. A seleção, por si só, não transfere créditos nem confirma pagamento; portos ainda não beneficiados podem ser removidos da lista.
+
+As compras geram cobranças pendentes. A confirmação simulada só está disponível fora de produção; a integração com um gateway de pagamento ainda não foi implementada.
+
+### Candidatos e vínculo exclusivo
+
+O painel de candidatos fica abaixo de assinatura e contratação. Antes da escolha, exibe apenas o primeiro nome e cursos concluídos (curso, instituição e carga horária). A escolha debita uma cota, libera nome completo, telefone e e-mail ao Porto responsável e oculta as demais candidaturas para outros Portos. Não expõe respostas sensíveis do Ethos.
+
+Os demais candidatos permanecem disponíveis, inclusive em vagas pausadas. O Navegante pode retirar qualquer candidatura enquanto não tiver vínculo ativo. Somente o Porto responsável pode encerrar o vínculo e registrar um motivo opcional, sem ressarcimento; o Navegante volta a ficar disponível e o tempo em dias entre escolha e encerramento é exibido por três meses. O Porto anterior mantém acesso aos contatos até uma escolha por outro Porto. O motivo registrado não é divulgado aos demais Portos.
+
+Antes de publicar esta funcionalidade, aplique [prisma/atualizar-contratacoes.sql](prisma/atualizar-contratacoes.sql) ao banco de destino (`prisma db execute --file prisma/atualizar-contratacoes.sql`). O script não remove registros, mas substitui a unicidade por vaga/candidato para permitir histórico de vínculos.
+
 ## O que ainda não foi feito
 
 - **Questionário Ethos:** o Perfil de Travessia v1.0 é preenchido em 11 blocos, com salvamento de progresso; o Navegante só acessa o painel após concluir.

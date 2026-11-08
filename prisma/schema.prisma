@@ -466,12 +466,15 @@ model Contratacao {
   vagaId        String
   valorCentavos Int
   criadaEm      DateTime  @default(now())
+  encerradaEm   DateTime?
+  motivoEncerramento String?
   Porto         Porto     @relation(fields: [portoId], references: [id], onDelete: Cascade)
   Navegante     Navegante @relation(fields: [naveganteId], references: [id], onDelete: Cascade)
   Vaga          Vaga      @relation(fields: [vagaId], references: [id], onDelete: Cascade)
 
-  @@unique([vagaId, naveganteId])
   @@index([portoId])
+  @@index([naveganteId, encerradaEm])
+  @@index([vagaId, encerradaEm])
 }
 
 /// Porto que apadrinha outro porto. `cotas` são as cotas de apoio já pagas.

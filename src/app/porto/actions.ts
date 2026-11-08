@@ -7,10 +7,10 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/auth";
 import { confirmarPagamentoPorto } from "@/lib/pagamento-porto";
+import { transferirCreditosPorto } from "@/lib/creditos-porto";
+import { encerrarContratacao, selecionarCandidato } from "@/lib/contratacao-porto";
 import {
-  assinaturaAtiva,
   MODALIDADES_FORMULARIO,
-  VALOR_ASSINATURA_ANUAL_CENTAVOS,
   VALOR_COTA_APOIO_CENTAVOS,
   VALOR_CREDITO_CONTRATACAO_CENTAVOS,
 } from "@/lib/porto-regras";
@@ -107,41 +107,16 @@ export async function alternarVagaPorto(formData: FormData) {
 
 /**
  * Contrata um candidato da vaga. Consome um crédito de contratação do porto.
- * Exige assinatura ativa; quando as contratações atingem a quantidade da vaga, ela é encerrada.
+ * Quando as contratações atingem a quantidade da vaga, ela é encerrada.
  */
 export async function contratarCandidato(formData: FormData) {
   const porto = await portoPorSessao();
   const vagaId = texto(formData, "vagaId");
   const naveganteId = texto(formData, "naveganteId");
 
-  const vaga = await db.vaga.findFirst({ where: { id: vagaId, portoId: porto.id, ativa: true }, select: { id: true, quantidade: true } });
-  if (!vaga) redirect("/porto?aviso=vaga-indisponivel");
-
-  const candidato = await db.vagaNavegante.findUnique({ where: { naveganteId_vagaId: { naveganteId, vagaId } }, select: { naveganteId: true } });
-  if (!candidato) redirect("/porto?aviso=sem-candidato");
-
-  const jaContratado = await db.contratacao.findUnique({ where: { vagaId_naveganteId: { vagaId, naveganteId } }, select: { id: true } });
-  if (jaContratado) redirect("/porto?aviso=ja-contratado");
-
-  if (!assinaturaAtiva(porto)) redirect("/porto?aviso=assinatura-vencida");
-
   let resultado: string;
   try {
-    resultado = await db.$transaction(async (tx) => {
-      // updateMany com condição: duas contratações simultâneas não consomem o mesmo crédito.
-      const debito = await tx.porto.updateMany({
-        where: { id: porto.id, creditosContratacao: { gt: 0 } },
-        data: { creditosContratacao: { decrement: 1 } },
-      });
-      if (debito.count === 0) return "sem-credito";
-
-      await tx.contratacao.create({
-        data: { portoId: porto.id, naveganteId, vagaId, valorCentavos: VALOR_CREDITO_CONTRATACAO_CENTAVOS },
-      });
-      const total = await tx.contratacao.count({ where: { vagaId } });
-      if (total >= vaga.quantidade) await tx.vaga.update({ where: { id: vagaId }, data: { ativa: false } });
-      return "contratado";
-    });
+    resultado = await selecionarCandidato(porto.id, vagaId, naveganteId);
   } catch (e) {
     console.error("[porto] falha ao contratar", e);
     resultado = "erro";
@@ -149,6 +124,22 @@ export async function contratarCandidato(formData: FormData) {
 
   atualizarPainel();
   redirect(`/porto?aviso=${resultado}`);
+}
+
+export async function encerrarVinculoCandidato(_: EstadoAcao, formData: FormData): Promise<EstadoAcao> {
+  const porto = await portoPorSessao();
+  const motivo = texto(formData, "motivo");
+  if (motivo.length > 1000) return { erro: "O motivo deve ter no máximo 1.000 caracteres." };
+  let resultado: string;
+  try {
+    resultado = await encerrarContratacao(porto.id, texto(formData, "contratacaoId"), motivo);
+  } catch (e) {
+    console.error("[porto] falha ao encerrar vínculo", e);
+    return { erro: "Não foi possível encerrar o vínculo. Tente novamente." };
+  }
+  if (resultado !== "vinculo-encerrado") return { erro: "Vínculo não encontrado ou já encerrado." };
+  atualizarPainel();
+  redirect("/porto?aviso=vinculo-encerrado#candidatos-do-porto");
 }
 
 // ---------- Cursos ----------
@@ -273,69 +264,82 @@ export async function alternarApoioIniciativaPorto(formData: FormData) {
 
 // ---------- Apadrinhamento e cotas ----------
 
-/** Apadrinha outro porto. Vincular não cobra nada; as cotas são compradas à parte. */
-export async function apadrinhar(formData: FormData) {
-  const porto = await portoPorSessao();
-  const afilhadoId = texto(formData, "afilhadoId");
-  if (!afilhadoId || afilhadoId === porto.id) return;
+export type PortoBeneficiarioEncontrado = {
+  id: string;
+  nome: string;
+  cidade: string | null;
+  uf: string | null;
+  cep: string | null;
+};
 
-  const afilhado = await db.porto.findUnique({ where: { id: afilhadoId }, select: { id: true } });
-  if (afilhado) {
-    await db.apadrinhamento.upsert({
-      where: { padrinhoId_afilhadoId: { padrinhoId: porto.id, afilhadoId } },
-      create: { padrinhoId: porto.id, afilhadoId },
-      update: {},
-    });
-  }
-  atualizarPainel();
+export async function buscarPortosBeneficiarios(termo: string): Promise<PortoBeneficiarioEncontrado[]> {
+  const porto = await portoPorSessao();
+  const busca = termo.trim();
+  if (busca.length < 2) return [];
+  return db.porto.findMany({
+    where: { id: { not: porto.id }, nome: { contains: busca, mode: "insensitive" } },
+    select: { id: true, nome: true, cidade: true, uf: true, cep: true },
+    orderBy: [{ nome: "asc" }, { id: "asc" }],
+    take: 20,
+  });
 }
 
-/** Deixa de apadrinhar. Só é possível se nenhuma cota foi paga para o porto. */
-export async function desapadrinhar(formData: FormData) {
+export async function adicionarBeneficiario(afilhadoId: string): Promise<{ erro?: string }> {
   const porto = await portoPorSessao();
-  await db.apadrinhamento.deleteMany({
-    where: { padrinhoId: porto.id, afilhadoId: texto(formData, "afilhadoId"), cotas: 0 },
+  if (!afilhadoId || afilhadoId === porto.id) return { erro: "Escolha outro porto." };
+  const afilhado = await db.porto.findUnique({ where: { id: afilhadoId }, select: { id: true } });
+  if (!afilhado) return { erro: "Porto beneficiário não encontrado." };
+  await db.apadrinhamento.upsert({
+    where: { padrinhoId_afilhadoId: { padrinhoId: porto.id, afilhadoId } },
+    create: { padrinhoId: porto.id, afilhadoId },
+    update: {},
   });
   atualizarPainel();
+  return {};
 }
 
-/** Cria a cobrança de cotas de apoio a um porto apadrinhado. As cotas valem após o pagamento. */
+export async function removerBeneficiario(formData: FormData) {
+  const porto = await portoPorSessao();
+  const removido = await db.apadrinhamento.deleteMany({
+    where: { padrinhoId: porto.id, afilhadoId: texto(formData, "afilhadoId"), cotas: 0 },
+  });
+  if (!removido.count) redirect("/porto?aviso=remocao-beneficiario#outros-portos");
+  atualizarPainel();
+}
+
+/** Cria uma cobrança de vagas para o próprio porto ou para outro porto. */
 export async function comprarCotas(formData: FormData) {
   const porto = await portoPorSessao();
   const afilhadoId = texto(formData, "afilhadoId");
   const quantidade = numero(formData, "quantidade");
-  if (quantidade === undefined || !Number.isInteger(quantidade) || quantidade < 1 || quantidade > 100) return;
+  if (quantidade === undefined || !Number.isInteger(quantidade) || quantidade < 1 || quantidade > 100) redirect("/porto?aviso=quantidade-invalida");
 
-  const apadrinhamento = await db.apadrinhamento.findUnique({
-    where: { padrinhoId_afilhadoId: { padrinhoId: porto.id, afilhadoId } },
-    select: { padrinhoId: true },
-  });
-  if (!apadrinhamento) return;
+  if (afilhadoId && afilhadoId !== porto.id) {
+    const afilhado = await db.porto.findUnique({ where: { id: afilhadoId }, select: { id: true } });
+    if (!afilhado) redirect("/porto?aviso=porto-invalido");
+  }
 
   await db.pagamentoPorto.create({
     data: {
       portoId: porto.id,
-      afilhadoId,
-      tipo: TipoPagamentoPorto.COTA_APOIO,
+      afilhadoId: afilhadoId && afilhadoId !== porto.id ? afilhadoId : null,
+      tipo: afilhadoId && afilhadoId !== porto.id ? TipoPagamentoPorto.COTA_APOIO : TipoPagamentoPorto.CREDITO_CONTRATACAO,
       quantidade,
       valorCentavos: quantidade * VALOR_COTA_APOIO_CENTAVOS,
     },
   });
   atualizarPainel();
+  redirect("/porto?aviso=cobranca-criada#pagamentos");
 }
 
-// ---------- Assinatura e crédito de contratação ----------
-
-/** Cria a cobrança da assinatura anual ou de um crédito de contratação. */
-export async function criarCobrancaPorto(formData: FormData) {
+/** Transfere créditos já pagos para outro porto. */
+export async function doarCotas(formData: FormData) {
   const porto = await portoPorSessao();
-  const tipo = texto(formData, "tipo");
-  if (tipo === "ASSINATURA_ANUAL") {
-    await db.pagamentoPorto.create({ data: { portoId: porto.id, tipo, valorCentavos: VALOR_ASSINATURA_ANUAL_CENTAVOS } });
-  } else if (tipo === "CREDITO_CONTRATACAO") {
-    await db.pagamentoPorto.create({ data: { portoId: porto.id, tipo, valorCentavos: VALOR_CREDITO_CONTRATACAO_CENTAVOS } });
-  }
+  const quantidade = numero(formData, "quantidade");
+  if (quantidade === undefined) redirect("/porto?aviso=quantidade-invalida");
+  const resultado = await transferirCreditosPorto(porto.id, texto(formData, "afilhadoId"), quantidade);
   atualizarPainel();
+  redirect(`/porto?aviso=${resultado === "invalido" ? "transferencia-invalida" : resultado}#outros-portos`);
 }
 
 /**

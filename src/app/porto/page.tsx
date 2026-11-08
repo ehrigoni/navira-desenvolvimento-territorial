@@ -2,19 +2,22 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/auth";
 import { formatarCentavos, formatarFaixaSalarial } from "@/lib/matching";
-import { assinaturaAtiva, CATEGORIA_INICIATIVA_ROTULO, VALOR_ASSINATURA_ANUAL_CENTAVOS, VALOR_COTA_APOIO_CENTAVOS, VALOR_CREDITO_CONTRATACAO_CENTAVOS } from "@/lib/porto-regras";
+import { assinaturaAtiva, CATEGORIA_INICIATIVA_ROTULO, VALOR_COTA_APOIO_CENTAVOS } from "@/lib/porto-regras";
 import FormVagaPorto from "./FormVagaPorto";
 import FormCursoPorto from "./FormCursoPorto";
 import FormIniciativaPorto from "./FormIniciativaPorto";
+import FormularioRecolhivel from "./FormularioRecolhivel";
+import BuscaBeneficiario from "./BuscaBeneficiario";
+import FormEncerrarVinculo from "./FormEncerrarVinculo";
+import { listarCandidatosPorto, visivelAoPorto } from "@/lib/contratacao-porto";
 import {
   alternarApoioIniciativaPorto,
   alternarIniciativaPorto,
   alternarVagaPorto,
-  apadrinhar,
   comprarCotas,
   contratarCandidato,
-  criarCobrancaPorto,
-  desapadrinhar,
+  doarCotas,
+  removerBeneficiario,
   removerCursoPorto,
   simularPagamento,
 } from "./actions";
@@ -22,10 +25,17 @@ import {
 const AVISOS: Record<string, string> = {
   contratado: "Contratação registrada. Um crédito de contratação foi usado.",
   "sem-credito": "Sem crédito de contratação. Compre um crédito para contratar.",
-  "assinatura-vencida": "Sua assinatura venceu. Renove para contratar.",
   "vaga-indisponivel": "Esta vaga não está mais disponível para contratação.",
   "sem-candidato": "Esta pessoa não está na lista de candidatos da vaga.",
   "ja-contratado": "Esta pessoa já foi contratada para esta vaga.",
+  "candidato-indisponivel": "Este candidato já foi escolhido por um porto. Nenhuma cota foi debitada.",
+  "vinculo-encerrado": "Vínculo encerrado sem ressarcimento. O navegante está disponível para outros portos.",
+  "cobranca-criada": "Cobrança criada. Os créditos serão liberados após a confirmação do pagamento.",
+  transferido: "Créditos transferidos para o outro porto.",
+  "quantidade-invalida": "Informe uma quantidade entre 1 e 100 vagas.",
+  "porto-invalido": "Porto beneficiário não encontrado.",
+  "transferencia-invalida": "Não foi possível transferir os créditos: confira o porto e a quantidade.",
+  "remocao-beneficiario": "Não foi possível remover este porto: portos com vagas apoiadas permanecem no histórico.",
   erro: "Não foi possível concluir a contratação. Tente novamente.",
 };
 
@@ -45,7 +55,7 @@ const ROTULO_STATUS_PAGAMENTO: Record<string, string> = {
 const MODALIDADE_ROTULO: Record<string, string> = { PRESENCIAL: "presencial", REMOTA: "online", HIBRIDA: "presencial e online" };
 
 function nomeNavegante(n: { nomeSocial: string | null; usuario: { nome: string } }) {
-  return n.nomeSocial ?? n.usuario.nome;
+  return (n.nomeSocial ?? n.usuario.nome).trim().split(/\s+/)[0];
 }
 
 export default async function PainelPorto({
@@ -63,12 +73,11 @@ export default async function PainelPorto({
   const ativa = assinaturaAtiva(porto, agora);
   const naoEhMeu = { OR: [{ portoId: null }, { portoId: { not: porto.id } }] };
 
-  const [minhasVagas, regiaoVagas, meusCursos, regiaoCursos, minhasIniciativas, outrasIniciativas, outrosPortos, apadrinhamentos, pagamentos] = await Promise.all([
+  const [minhasVagas, regiaoVagas, meusCursos, regiaoCursos, minhasIniciativas, outrasIniciativas, apadrinhamentos, pagamentos, candidatos] = await Promise.all([
     db.vaga.findMany({
       where: { portoId: porto.id },
       include: {
-        navegantes: { select: { naveganteId: true, navegante: { select: { id: true, nomeSocial: true, usuario: { select: { nome: true } } } } } },
-        contratacoes: { select: { naveganteId: true } },
+        contratacoes: { where: { encerradaEm: null }, select: { naveganteId: true } },
       },
       orderBy: { criadaEm: "desc" },
     }),
@@ -87,7 +96,7 @@ export default async function PainelPorto({
     db.curso.findMany({
       where: { portoId: porto.id },
       include: {
-        navegantes: { select: { naveganteId: true, navegante: { select: { id: true, nomeSocial: true, usuario: { select: { nome: true } } } } } },
+        navegantes: { where: { navegante: visivelAoPorto(porto.id) }, select: { naveganteId: true, navegante: { select: { id: true, nomeSocial: true, usuario: { select: { nome: true } } } } } },
       },
       orderBy: { nome: "asc" },
     }),
@@ -112,6 +121,7 @@ export default async function PainelPorto({
       include: {
         _count: { select: { ApoioIniciativa: true } },
         ApoioIniciativa: {
+          where: { OR: [{ naveganteId: null }, { Navegante: visivelAoPorto(porto.id) }] },
           include: {
             Navegante: { select: { nomeSocial: true, usuario: { select: { nome: true } } } },
             Porto: { select: { nome: true } },
@@ -129,21 +139,19 @@ export default async function PainelPorto({
       orderBy: { criadaEm: "desc" },
       take: 30,
     }),
-    db.porto.findMany({
-      where: { cidade: porto.cidade, uf: porto.uf, NOT: { id: porto.id } },
-      orderBy: { nome: "asc" },
-      take: 50,
+    db.apadrinhamento.findMany({
+      where: { padrinhoId: porto.id },
+      select: { cotas: true, afilhado: { select: { id: true, nome: true, tipo: true, cidade: true, uf: true, cep: true } } },
+      orderBy: { afilhado: { nome: "asc" } },
     }),
-    db.apadrinhamento.findMany({ where: { padrinhoId: porto.id }, select: { afilhadoId: true, cotas: true } }),
     db.pagamentoPorto.findMany({
       where: { portoId: porto.id },
       include: { afilhado: { select: { nome: true } } },
       orderBy: { criadoEm: "desc" },
       take: 20,
     }),
+    listarCandidatosPorto(porto.id, agora),
   ]);
-
-  const apadrinhadosPorId = new Map(apadrinhamentos.map((a) => [a.afilhadoId, a.cotas]));
 
   return (
     <main className="conteudo">
@@ -155,14 +163,14 @@ export default async function PainelPorto({
           </p>
         </div>
         <form action="/sair" method="post">
-          <button className="botao secundario" type="submit">
+          <button className="botao botao-sair" type="submit">
             Sair
           </button>
         </form>
       </header>
 
       {aviso && AVISOS[aviso] && (
-        <p className={`alerta ${aviso === "contratado" ? "sucesso" : "erro"}`} role="status">{AVISOS[aviso]}</p>
+        <p className={`alerta ${["contratado", "cobranca-criada", "transferido", "vinculo-encerrado"].includes(aviso) ? "sucesso" : "erro"}`} role="status">{AVISOS[aviso]}</p>
       )}
 
       <section className="cartao" id="assinatura">
@@ -174,25 +182,83 @@ export default async function PainelPorto({
           Créditos de contratação disponíveis: <strong>{porto.creditosContratacao}</strong>.
         </p>
         <p className="ajuda">
-          A assinatura anual de {formatarCentavos(VALOR_ASSINATURA_ANUAL_CENTAVOS)} dá direito a contratar um empregado.
-          Cada empregado contratado pela plataforma custa {formatarCentavos(VALOR_CREDITO_CONTRATACAO_CENTAVOS)}.
+          Cada vaga custa {formatarCentavos(VALOR_COTA_APOIO_CENTAVOS)} e gera um crédito de contratação para o porto beneficiário.
+          A primeira compra do ano ativa a assinatura do pagador por um ano. Créditos disponíveis podem ser usados mesmo sem assinatura ativa.
         </p>
-        <div className="acoes-porto">
-          <form action={criarCobrancaPorto}>
-            <input type="hidden" name="tipo" value="ASSINATURA_ANUAL" />
-            <button className="botao" type="submit">Gerar cobrança da assinatura anual</button>
-          </form>
-          <form action={criarCobrancaPorto}>
-            <input type="hidden" name="tipo" value="CREDITO_CONTRATACAO" />
-            <button className="botao secundario" type="submit">Comprar crédito de contratação</button>
-          </form>
-        </div>
+        <form action={comprarCotas} className="formulario-linha">
+          <label htmlFor="vagas-proprias">Vagas para este porto</label>
+          <input id="vagas-proprias" name="quantidade" type="number" min={1} max={100} defaultValue={1} required />
+          <button className="botao" type="submit">Comprar vagas para meu porto</button>
+        </form>
+        <p className="ajuda">As cobranças pendentes aparecem abaixo. O pagamento é necessário para liberar os créditos.</p>
+      </section>
+
+      <section className="cartao" id="candidatos-do-porto">
+        <h2>Candidatos às vagas do porto</h2>
+        <p className="ajuda">Antes da escolha, somente o primeiro nome e os cursos concluídos são exibidos. Escolher um candidato custa uma cota e libera os contatos, sem ressarcimento caso a contratação não tenha sucesso.</p>
+        <h3>Potenciais candidatos</h3>
+        {candidatos.filter((c) => !c.vinculo && c.vagas.length > 0).length === 0 && <p className="vazio">Nenhum candidato disponível.</p>}
+        <ul className="lista">
+          {candidatos.filter((c) => !c.vinculo && c.vagas.length > 0).map((candidato) => (
+            <li key={candidato.id}>
+              <strong>{candidato.nome}</strong>
+              {candidato.cursos.length ? (
+                <ul>{candidato.cursos.map((curso, indice) => <li key={indice}>{curso.curso} · {curso.instituicao} · {curso.cargaHoraria}h</li>)}</ul>
+              ) : <p className="ajuda">Nenhum curso concluído informado.</p>}
+              {candidato.turnovers.map((turnover, indice) => (
+                <p className="ajuda" key={indice}>Turnover: {turnover.dias} dia(s) · vínculo encerrado em {turnover.encerradaEm.toLocaleDateString("pt-BR", { timeZone: "UTC" })}</p>
+              ))}
+              {candidato.contatos && (
+                <div>
+                  <p>Nome completo: {candidato.contatos.nome}</p>
+                  <p>Telefone: {candidato.contatos.telefone} · E-mail: {candidato.contatos.email ?? "não informado"}</p>
+                  <p className="ajuda">Contatos disponíveis até uma nova contratação por outro porto.</p>
+                </div>
+              )}
+              {candidato.vagas.map((vaga) => (
+                <div className="acoes-porto" key={vaga.id}>
+                  <span>{vaga.titulo}</span>
+                  {vaga.ativa && porto.creditosContratacao > 0 ? (
+                    <form action={contratarCandidato}>
+                      <input type="hidden" name="vagaId" value={vaga.id} />
+                      <input type="hidden" name="naveganteId" value={candidato.id} />
+                      <button className="botao" type="submit">Escolher candidato (1 cota)</button>
+                    </form>
+                  ) : <span className="ajuda">{vaga.ativa ? "sem cota disponível" : "vaga pausada; candidatura mantida"}</span>}
+                </div>
+              ))}
+            </li>
+          ))}
+        </ul>
+        <h3>Candidatos escolhidos</h3>
+        {candidatos.filter((c) => c.vinculo).length === 0 && <p className="vazio">Nenhum vínculo ativo.</p>}
+        <ul className="lista">
+          {candidatos.filter((c) => c.vinculo).map((candidato) => (
+            <li key={candidato.id}>
+              <strong>{candidato.contatos?.nome ?? candidato.nome}</strong>
+              <p>Vaga: {candidato.vinculo!.vaga}</p>
+              {candidato.contatos && <p>Telefone: {candidato.contatos.telefone} · E-mail: {candidato.contatos.email ?? "não informado"}</p>}
+              <ul>{candidato.cursos.map((curso, indice) => <li key={indice}>{curso.curso} · {curso.instituicao} · {curso.cargaHoraria}h</li>)}</ul>
+              <FormularioRecolhivel rotulo="Informar não sucesso na contratação">
+                <FormEncerrarVinculo contratacaoId={candidato.vinculo!.id} />
+              </FormularioRecolhivel>
+            </li>
+          ))}
+        </ul>
+        {candidatos.some((c) => !c.vinculo && c.vagas.length === 0 && c.contatos) && (
+          <div>
+            <h3>Contatos de vínculos encerrados</h3>
+            <p className="ajuda">Estes navegantes não estão na lista de potenciais candidatos. Os contatos permanecem disponíveis até uma nova contratação por outro porto.</p>
+            {candidatos.filter((c) => !c.vinculo && c.vagas.length === 0 && c.contatos).map((c) => (
+              <p key={c.id}>{c.contatos!.nome} · {c.contatos!.telefone} · {c.contatos!.email ?? "e-mail não informado"}</p>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="cartao" id="vagas-do-porto">
         <h2>Vagas do porto</h2>
         <p className="ajuda">Publique as vagas de acordo com as necessidades do porto. Quem se candidata entra na lista de candidatos.</p>
-        <FormVagaPorto />
         <h3>Vagas publicadas</h3>
         {minhasVagas.length === 0 ? (
           <p className="vazio">Nenhuma vaga publicada.</p>
@@ -213,34 +279,6 @@ export default async function PainelPorto({
                     <input type="hidden" name="vagaId" value={vaga.id} />
                     <button className="botao secundario" type="submit">{vaga.ativa ? "Pausar vaga" : "Reativar vaga"}</button>
                   </form>
-                  <h4>Candidatos ({vaga.navegantes.length})</h4>
-                  {vaga.navegantes.length === 0 ? (
-                    <p className="vazio">Ainda não há candidatos.</p>
-                  ) : (
-                    <ul className="lista">
-                      {vaga.navegantes.map(({ navegante }) => {
-                        const jaContratado = contratados.has(navegante.id);
-                        return (
-                          <li key={navegante.id}>
-                            {nomeNavegante(navegante)}{" "}
-                            {jaContratado ? (
-                              <span className="tag">contratado</span>
-                            ) : vaga.ativa && ativa && porto.creditosContratacao > 0 ? (
-                              <form action={contratarCandidato} className="form-remover-porto">
-                                <input type="hidden" name="vagaId" value={vaga.id} />
-                                <input type="hidden" name="naveganteId" value={navegante.id} />
-                                <button className="botao" type="submit">Contratar</button>
-                              </form>
-                            ) : (
-                              <span className="ajuda">
-                                {!vaga.ativa ? "vaga pausada" : !ativa ? "assinatura vencida" : "sem crédito de contratação"}
-                              </span>
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
                 </li>
               );
             })}
@@ -261,12 +299,12 @@ export default async function PainelPorto({
             ))}
           </ul>
         )}
+        <FormularioRecolhivel rotulo="Publicar vaga"><FormVagaPorto /></FormularioRecolhivel>
       </section>
 
       <section className="cartao" id="cursos-do-porto">
         <h2>Cursos do porto</h2>
         <p className="ajuda">Cadastre os cursos do porto. Quem escolhe um curso entra na lista dele.</p>
-        <FormCursoPorto />
         <h3>Cursos cadastrados</h3>
         {meusCursos.length === 0 ? (
           <p className="vazio">Nenhum curso cadastrado.</p>
@@ -313,12 +351,12 @@ export default async function PainelPorto({
             ))}
           </ul>
         )}
+        <FormularioRecolhivel rotulo="Cadastrar curso"><FormCursoPorto /></FormularioRecolhivel>
       </section>
 
       <section className="cartao" id="iniciativas-do-porto">
         <h2>Iniciativas do porto</h2>
         <p className="ajuda">Cadastre as iniciativas do porto. Quem apoia entra na lista de potenciais apoiadores.</p>
-        <FormIniciativaPorto />
         <h3>Iniciativas cadastradas</h3>
         {minhasIniciativas.length === 0 ? (
           <p className="vazio">Nenhuma iniciativa cadastrada.</p>
@@ -380,50 +418,48 @@ export default async function PainelPorto({
             })}
           </ul>
         )}
+        <FormularioRecolhivel rotulo="Cadastrar iniciativa"><FormIniciativaPorto /></FormularioRecolhivel>
       </section>
 
       <section className="cartao" id="outros-portos">
-        <h2>Outros portos da região</h2>
-        <p className="ajuda">Apadrinhe outros portos. Para apoiá-los com recursos, compre cotas de apoio.</p>
-        {outrosPortos.length === 0 ? (
-          <p className="vazio">
-            Ainda não há outros portos em {porto.cidade}/{porto.uf}.
-          </p>
+        <h2>Apadrinhar outros portos</h2>
+        <p className="ajuda">Compre vagas para outro porto ou doe créditos disponíveis. Cada vaga paga ou crédito transferido beneficia o porto escolhido.</p>
+        <BuscaBeneficiario selecionados={apadrinhamentos.map(({ afilhado }) => afilhado.id)} />
+        <h3>Portos a beneficiar</h3>
+        {apadrinhamentos.length === 0 ? (
+          <p className="vazio">Nenhum porto adicionado à lista.</p>
         ) : (
           <ul className="lista">
-            {outrosPortos.map((p) => {
-              const cotas = apadrinhadosPorId.get(p.id);
-              const apadrinhado = cotas !== undefined;
+            {apadrinhamentos.map(({ afilhado: p, cotas }) => {
               return (
                 <li key={p.id}>
                   <strong>{p.nome}</strong>{" "}
                   <span className="ajuda">
-                    · {p.tipo?.toLowerCase() ?? "porto"} · CEP {p.cep ?? "—"}
+                    · {p.tipo?.toLowerCase() ?? "porto"} · {[p.cidade, p.uf].filter(Boolean).join("/")} · CEP {p.cep ?? "—"}
                   </span>
-                  {apadrinhado ? (
+                  {cotas > 0 ? (
+                    <div><span className="tag">Apadrinhado · {cotas} vaga(s) apoiada(s)</span></div>
+                  ) : (
                     <div>
-                      <span className="tag">Apadrinhado · {cotas} cota(s)</span>
-                      {cotas === 0 && (
-                        <form action={desapadrinhar} className="form-remover-porto">
-                          <input type="hidden" name="afilhadoId" value={p.id} />
-                          <button className="botao secundario" type="submit">Deixar de apadrinhar</button>
-                        </form>
-                      )}
-                      <form action={comprarCotas} className="formulario-linha">
+                      <span className="tag">Selecionado · ainda não beneficiado</span>
+                      <form action={removerBeneficiario} className="form-remover-porto">
                         <input type="hidden" name="afilhadoId" value={p.id} />
-                        <label htmlFor={`cotas-${p.id}`} className="ajuda">Cotas</label>
-                        <input id={`cotas-${p.id}`} name="quantidade" type="number" min={1} max={100} defaultValue={1} />
-                        <button className="botao" type="submit">
-                          Comprar cotas ({formatarCentavos(VALOR_COTA_APOIO_CENTAVOS)} cada)
-                        </button>
+                        <button className="botao secundario" type="submit">Remover da lista</button>
                       </form>
                     </div>
-                  ) : (
-                    <form action={apadrinhar}>
-                      <input type="hidden" name="afilhadoId" value={p.id} />
-                      <button className="botao secundario" type="submit">Apadrinhar</button>
-                    </form>
                   )}
+                  <form action={comprarCotas} className="formulario-linha">
+                    <input type="hidden" name="afilhadoId" value={p.id} />
+                    <label htmlFor={`cotas-${p.id}`}>Vagas para {p.nome}</label>
+                    <input id={`cotas-${p.id}`} name="quantidade" type="number" min={1} max={100} defaultValue={1} required />
+                    <button className="botao" type="submit">Comprar vagas para este porto</button>
+                  </form>
+                  <form action={doarCotas} className="formulario-linha">
+                    <input type="hidden" name="afilhadoId" value={p.id} />
+                    <label htmlFor={`doacao-${p.id}`}>Créditos para doar a {p.nome}</label>
+                    <input id={`doacao-${p.id}`} name="quantidade" type="number" min={1} max={100} defaultValue={1} required />
+                    <button className="botao secundario" type="submit">Doar créditos existentes</button>
+                  </form>
                 </li>
               );
             })}

@@ -7,7 +7,7 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "node --env-file-if-exists=.env --import tsx --test src/lib/ethos-crypto.test.ts src/lib/questionario-ethos.test.ts src/lib/ethos-persistencia.test.ts src/lib/validacao-ethos.test.ts src/lib/matching.test.ts src/lib/porto-regras.test.ts",
+    "test": "node --env-file-if-exists=.env --import tsx --test src/lib/ethos-crypto.test.ts src/lib/questionario-ethos.test.ts src/lib/ethos-persistencia.test.ts src/lib/validacao-ethos.test.ts src/lib/matching.test.ts src/lib/porto-regras.test.ts src/lib/pagamento-porto.test.ts src/lib/contratacao-porto.test.ts",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:importar-entidades": "tsx prisma/importar-entidades.ts"

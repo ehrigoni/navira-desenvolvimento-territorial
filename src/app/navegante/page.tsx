@@ -17,6 +17,7 @@ import {
   removerCursoRealizado,
   removerPorto,
   removerVagaEscolhida,
+  retirarCandidaturasPorto,
   type ItemBusca,
 } from "./actions";
 
@@ -25,17 +26,18 @@ const MODALIDADE_ROTULO: Record<string, string> = { PRESENCIAL: "presencial", RE
 export default async function PainelNavegante({
   searchParams,
 }: {
-  searchParams: Promise<{ vagas?: string; cursos?: string; incluir?: string }>;
+  searchParams: Promise<{ vagas?: string; cursos?: string; incluir?: string; aviso?: string }>;
 }) {
   const sessao = await exigirSessao("NAVEGANTE");
-  const { vagas: verVagas, cursos: verCursos, incluir } = await searchParams;
+  const { vagas: verVagas, cursos: verCursos, incluir, aviso } = await searchParams;
 
   const navegante = await db.navegante.findUnique({
     where: { usuarioId: sessao.sub },
     include: {
       portos: { include: { porto: true } },
       CursoRealizado: { orderBy: { dataRealizacao: "desc" } },
-      vagas: { select: { vagaId: true } },
+      vagas: { select: { vagaId: true, vaga: { include: { destino: { select: { razaoSocial: true } }, porto: { select: { id: true, nome: true } } } } } },
+      Contratacao: { where: { encerradaEm: null }, select: { Porto: { select: { nome: true } } } },
       cursos: { select: { cursoId: true } },
     },
   });
@@ -86,7 +88,8 @@ export default async function PainelNavegante({
     escolhido: escolhidasVagas.has(vaga.id),
     indice,
   }));
-  const vagasEscolhidas = vagasAtivas.filter((v) => escolhidasVagas.has(v.id));
+  const vagasEscolhidas = navegante.vagas.map((v) => v.vaga);
+  const vinculoAtivo = navegante.Contratacao[0];
 
   // Cursos recomendados: próximos dos portos; "todos" mostra todos.
   const cursosDisponiveis = await db.curso.findMany({
@@ -150,6 +153,11 @@ export default async function PainelNavegante({
         </form>
       </header>
 
+      {aviso === "vinculo-ativo" && <p className="alerta erro" role="alert">Você possui vínculo ativo com um porto e não pode alterar suas candidaturas.</p>}
+      {aviso === "vaga-invalida" && <p className="alerta erro" role="alert">Esta vaga não está disponível para candidatura.</p>}
+      {aviso === "porto-invalido" && <p className="alerta erro" role="alert">Porto inválido para retirada da candidatura.</p>}
+      {vinculoAtivo && <p className="alerta sucesso" role="status">Você foi escolhido por {vinculoAtivo.Porto.nome}. Suas demais candidaturas estão ocultas e não podem ser retiradas enquanto o vínculo estiver ativo.</p>}
+
       <div className="acao-editar-ethos">
         <Link className="botao" href="/navegante/ethos">Editar Ethos</Link>
       </div>
@@ -194,7 +202,7 @@ export default async function PainelNavegante({
             <Link href="/navegante?vagas=todas">Ver todas as vagas</Link>
           )}
         </p>
-        <BuscaEscolha
+        {!vinculoAtivo && <BuscaEscolha
           id="busca-vaga"
           rotulo="Buscar vaga"
           placeholder="Digite o cargo ou a empresa"
@@ -204,7 +212,7 @@ export default async function PainelNavegante({
           escolher={escolherVaga}
           campo="vagaId"
           vazio="Nenhuma vaga próxima dos seus portos no momento."
-        />
+        />}
         <h3>Vagas escolhidas</h3>
         {vagasEscolhidas.length === 0 ? (
           <p className="vazio">Você ainda não escolheu vagas.</p>
@@ -213,11 +221,16 @@ export default async function PainelNavegante({
             {vagasEscolhidas.map((vaga) => (
               <li key={vaga.id}>
                 <strong>{vaga.titulo}</strong>{" "}
-                <form action={removerVagaEscolhida} className="form-remover-porto">
+                {!vinculoAtivo && <form action={removerVagaEscolhida} className="form-remover-porto">
                   <input type="hidden" name="vagaId" value={vaga.id} />
                   <button className="botao-x" type="submit" aria-label={`Remover ${vaga.titulo}`} title="Remover vaga">×</button>
-                </form>
+                </form>}
+                {!vaga.ativa && <span className="tag">Vaga pausada · candidatura mantida</span>}
                 <div className="ajuda">{vaga.destino?.razaoSocial ?? vaga.porto?.nome}</div>
+                {!vinculoAtivo && vaga.porto && <form action={retirarCandidaturasPorto}>
+                  <input type="hidden" name="portoId" value={vaga.porto.id} />
+                  <button className="botao secundario" type="submit">Retirar todas as candidaturas de {vaga.porto.nome}</button>
+                </form>}
               </li>
             ))}
           </ul>

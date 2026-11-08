@@ -7,11 +7,8 @@ export const VALOR_ASSINATURA_ANUAL_CENTAVOS = 130_000;
 /** Valor de cada empregado contratado via plataforma (um crédito de contratação). */
 export const VALOR_CREDITO_CONTRATACAO_CENTAVOS = 130_000;
 
-/**
- * Valor de uma cota de apoio a outro porto.
- * PROVISÓRIO: o valor não foi definido nas regras de negócio. Confirmar antes de ir para produção.
- */
-export const VALOR_COTA_APOIO_CENTAVOS = 130_000;
+/** Cada vaga comprada, para si ou para outro porto, custa R$ 1.300,00. */
+export const VALOR_COTA_APOIO_CENTAVOS = VALOR_CREDITO_CONTRATACAO_CENTAVOS;
 
 export const MODALIDADES_FORMULARIO: Record<string, Modalidade> = {
   PRESENCIAL: "PRESENCIAL",

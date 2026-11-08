@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { criarSessao } from "@/lib/session";
 import { destinoPosLogin } from "@/lib/fluxos";
+import { VALOR_CREDITO_CONTRATACAO_CENTAVOS } from "@/lib/porto-regras";
 import { apenasDigitos, cadastroSchema, MSG, validarIdentificador } from "@/lib/validacao";
 
 export type EstadoCadastro = {
@@ -91,6 +92,13 @@ export async function cadastrar(_: EstadoCadastro, formData: FormData): Promise<
                   cep,
                   cidade: campos.cidade,
                   uf: campos.uf,
+                  pagamentosPorto: {
+                    create: {
+                      tipo: "CREDITO_CONTRATACAO",
+                      quantidade: 1,
+                      valorCentavos: VALOR_CREDITO_CONTRATACAO_CENTAVOS,
+                    },
+                  },
                 },
               },
             }

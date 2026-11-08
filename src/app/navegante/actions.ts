@@ -8,6 +8,8 @@ import { exigirSessao } from "@/lib/auth";
 import { sincronizarMatching } from "@/lib/sincronizar-matching";
 import { formatarFaixaSalarial } from "@/lib/matching";
 import { apenasDigitos } from "@/lib/validacao";
+import { atualizarCandidatura, retirarCandidaturasDoPorto } from "@/lib/contratacao-porto";
+import { redirect } from "next/navigation";
 
 export type EstadoAcao = { erro?: string; erros?: Record<string, string>; sucesso?: string };
 
@@ -139,15 +141,10 @@ export async function removerCursoRealizado(formData: FormData) {
 /** Alterna a escolha de uma vaga (VagaNavegante). */
 export async function alternarVaga(formData: FormData) {
   const naveganteId = await navegantePorSessao();
-  const vagaId = texto(formData, "vagaId");
-  const escolhida = await db.vagaNavegante.findUnique({ where: { naveganteId_vagaId: { naveganteId, vagaId } } });
-  if (escolhida) {
-    await db.vagaNavegante.delete({ where: { naveganteId_vagaId: { naveganteId, vagaId } } });
-  } else {
-    const vaga = await db.vaga.findFirst({ where: { id: vagaId, ativa: true }, select: { id: true } });
-    if (vaga) await db.vagaNavegante.create({ data: { naveganteId, vagaId } });
-  }
+  const resultado = await atualizarCandidatura(naveganteId, texto(formData, "vagaId"), "alternar");
+  if (resultado !== "atualizada") redirect(`/navegante?aviso=${resultado}`);
   revalidatePath("/navegante");
+  revalidatePath("/porto");
 }
 
 /** Alterna a escolha de um curso recomendado (CursoNavegante). */
@@ -269,12 +266,10 @@ export async function buscarCursos(termo: string): Promise<ItemBusca[]> {
 /** Escolhe uma vaga (Enter na busca). Idempotente. */
 export async function escolherVaga(formData: FormData) {
   const naveganteId = await navegantePorSessao();
-  const vagaId = texto(formData, "vagaId");
-  const vaga = await db.vaga.findFirst({ where: { id: vagaId, ativa: true }, select: { id: true } });
-  if (vaga) {
-    await db.vagaNavegante.upsert({ where: { naveganteId_vagaId: { naveganteId, vagaId } }, create: { naveganteId, vagaId }, update: {} });
-  }
+  const resultado = await atualizarCandidatura(naveganteId, texto(formData, "vagaId"), "adicionar");
+  if (resultado !== "atualizada") redirect(`/navegante?aviso=${resultado}`);
   revalidatePath("/navegante");
+  revalidatePath("/porto");
 }
 
 /** Escolhe um curso (Enter na busca). Idempotente. */
@@ -307,8 +302,18 @@ export async function alternarApoioIniciativaNavegante(formData: FormData) {
 /** Remove uma vaga da lista de escolhidas. */
 export async function removerVagaEscolhida(formData: FormData) {
   const naveganteId = await navegantePorSessao();
-  await db.vagaNavegante.deleteMany({ where: { naveganteId, vagaId: texto(formData, "vagaId") } });
+  const resultado = await atualizarCandidatura(naveganteId, texto(formData, "vagaId"), "remover");
+  if (resultado !== "atualizada") redirect(`/navegante?aviso=${resultado}`);
   revalidatePath("/navegante");
+  revalidatePath("/porto");
+}
+
+export async function retirarCandidaturasPorto(formData: FormData) {
+  const naveganteId = await navegantePorSessao();
+  const resultado = await retirarCandidaturasDoPorto(naveganteId, texto(formData, "portoId"));
+  if (resultado !== "atualizada") redirect(`/navegante?aviso=${resultado}`);
+  revalidatePath("/navegante");
+  revalidatePath("/porto");
 }
 
 /** Remove um curso da lista de escolhidos. */
