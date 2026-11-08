@@ -113,7 +113,7 @@ export default async function PainelNavegante({
           <p className="subtitulo">Olá, {sessao.nome.split(" ")[0]}. Seu painel de portos, vagas e cursos.</p>
         </div>
         <form action="/sair" method="post">
-          <button className="botao secundario" type="submit">Sair</button>
+          <button className="botao botao-sair" type="submit">Sair</button>
         </form>
       </header>
 

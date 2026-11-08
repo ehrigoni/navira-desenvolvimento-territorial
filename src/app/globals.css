@@ -457,6 +457,9 @@ a.ethos-navegacao-item:hover { background: #f3f8f8; border-color: var(--azul-med
 }
 
 .painel-cabecalho .subtitulo { margin-bottom: 0; }
+.painel-cabecalho .botao-sair, .acao-editar-ethos .botao { height: 50px; }
+.painel-cabecalho .botao-sair { background: var(--verde); border-color: var(--verde); color: var(--tinta); }
+.painel-cabecalho .botao-sair:hover { background: #5fbfb0; border-color: #5fbfb0; color: var(--tinta); }
 .acao-editar-ethos { margin: calc(-1 * var(--espaco-md)) 0 var(--espaco-xl); }
 /* Verde da marca sobre tinta: contraste AA (6.3:1) e harmonia com o painel azul de Meus portos. */
 .acao-editar-ethos .botao { background: var(--verde); border-color: var(--verde); color: var(--tinta); }
