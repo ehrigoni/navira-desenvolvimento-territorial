@@ -291,19 +291,21 @@ export default async function PainelNavegante({
               const apoiada = iniciativa.ApoioIniciativa.length > 0;
               return (
                 <li key={iniciativa.id}>
-                  <strong>{iniciativa.titulo}</strong>{" "}
-                  <span className="tag">{CATEGORIA_INICIATIVA_ROTULO[iniciativa.categoria]}</span>
+                  <div className="iniciativa-cabecalho">
+                    <strong>{iniciativa.titulo}</strong>
+                    <form action={alternarApoioIniciativaNavegante}>
+                      <input type="hidden" name="iniciativaId" value={iniciativa.id} />
+                      <button className={apoiada ? "botao secundario" : "botao"} type="submit">
+                        {apoiada ? "Deixar de apoiar" : "Apoiar iniciativa"}
+                      </button>
+                    </form>
+                    <span className="tag">{CATEGORIA_INICIATIVA_ROTULO[iniciativa.categoria]}</span>
+                  </div>
                   <div className="ajuda">
                     {iniciativa.Porto.nome} · {MODALIDADE_ROTULO[iniciativa.modalidade] ?? iniciativa.modalidade.toLowerCase()}
                     {" · "}{iniciativa._count.ApoioIniciativa} apoiador(es)
                   </div>
                   <p className="descricao-vaga">{iniciativa.descricao}</p>
-                  <form action={alternarApoioIniciativaNavegante}>
-                    <input type="hidden" name="iniciativaId" value={iniciativa.id} />
-                    <button className={apoiada ? "botao secundario" : "botao"} type="submit">
-                      {apoiada ? "Deixar de apoiar" : "Apoiar iniciativa"}
-                    </button>
-                  </form>
                 </li>
               );
             })}
