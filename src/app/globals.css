@@ -339,6 +339,24 @@ a.ethos-navegacao-item:hover { background: #f3f8f8; border-color: var(--azul-med
 }
 .acoes-questionario { display: flex; justify-content: space-between; gap: var(--espaco-md); }
 .questionario-formulario .acoes-questionario > .botao { width: auto; margin: 0; }
+
+/* Tablets e notebooks: duas colunas para aproveitar melhor a tela. */
+@media (min-width: 768px) {
+  /* main.central tem especificidade maior; repetimos o seletor para vencer a largura de 480px. */
+  main.central.questionario-page { width: min(100% - 48px, 960px); max-width: 960px; }
+  .questionario-formulario {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--espaco-xl);
+    align-items: start;
+  }
+  /* Campos que precisam de largura total: textos longos, múltipla escolha,
+     sensíveis (com termo de consentimento), alertas e ações. */
+  .questionario-formulario > .alerta,
+  .questionario-formulario .pergunta-ethos:has(textarea),
+  .questionario-formulario .pergunta-ethos:has(.opcoes-check),
+  .questionario-formulario .pergunta-ethos:has(.consentimento-sensivel),
+  .questionario-formulario .acoes-questionario { grid-column: 1 / -1; }
+}
 .aviso-questionario { display: grid; gap: var(--espaco-sm); margin-bottom: var(--espaco-md); }
 .aviso-questionario p { margin: 0; }
 .aviso-questionario .botao { justify-self: start; }
