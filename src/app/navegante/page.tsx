@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/auth";
 import { calcularIndiceLocal, formatarFaixaSalarial } from "@/lib/matching";
-import FormularioPorto from "./FormularioPorto";
+import BuscaPorto from "./BuscaPorto";
 import FormularioCursoRealizado from "./FormularioCursoRealizado";
 import { alternarCurso, alternarVaga, removerCursoRealizado, removerPorto } from "./actions";
 
@@ -99,7 +99,7 @@ export default async function PainelNavegante({ searchParams }: { searchParams: 
           </ul>
         )}
         <h3>Adicionar porto</h3>
-        <FormularioPorto />
+        <BuscaPorto />
       </section>
 
       <section className="cartao">

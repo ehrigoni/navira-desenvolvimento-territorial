@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { Modalidade, Prisma, TipoPorto } from "@prisma/client";
+import { Modalidade, Prisma, StatusPorto, TipoPorto } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/auth";
@@ -159,6 +159,53 @@ export async function alternarCurso(formData: FormData) {
   } else {
     const curso = await db.curso.findUnique({ where: { id: cursoId }, select: { id: true } });
     if (curso) await db.cursoNavegante.create({ data: { naveganteId, cursoId } });
+  }
+  revalidatePath("/navegante");
+}
+
+export type PortoEncontrado = {
+  id: string;
+  nome: string;
+  tipo: TipoPorto | null;
+  cidade: string | null;
+  uf: string | null;
+  cep: string | null;
+  vinculado: boolean;
+};
+
+const STATUS_BUSCAVEIS: StatusPorto[] = ["ATIVO", "EM_ANALISE"];
+
+/** Busca portos e entidades cadastrados pelo nome (usada enquanto a pessoa digita). */
+export async function buscarPortos(termo: string): Promise<PortoEncontrado[]> {
+  const naveganteId = await navegantePorSessao();
+  const busca = termo.trim().slice(0, 100);
+  if (busca.length < 2) return [];
+
+  // unaccent: "sao" encontra "São". Escapa % e _ para que o texto digitado seja literal.
+  const padrao = `%${busca.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const portos = await db.$queryRaw<PortoEncontrado[]>(Prisma.sql`
+    SELECT p.id, p.nome, p.tipo::text AS tipo, p.cidade, p.uf, p.cep,
+           EXISTS (SELECT 1 FROM "InscricaoPorto" i WHERE i."portoId" = p.id AND i."naveganteId" = ${naveganteId}) AS vinculado
+    FROM "Porto" p
+    WHERE unaccent(p.nome) ILIKE unaccent(${padrao})
+      AND p.status::text IN ('ATIVO', 'EM_ANALISE')
+    ORDER BY p.nome
+    LIMIT 8`);
+  return portos;
+}
+
+/** Vincula o Navegante a um porto já cadastrado. */
+export async function vincularPorto(formData: FormData) {
+  const naveganteId = await navegantePorSessao();
+  const portoId = texto(formData, "portoId");
+  const porto = await db.porto.findFirst({ where: { id: portoId, status: { in: STATUS_BUSCAVEIS } }, select: { id: true } });
+  if (porto) {
+    await db.inscricaoPorto.upsert({
+      where: { naveganteId_portoId: { naveganteId, portoId } },
+      create: { naveganteId, portoId },
+      update: {},
+    });
+    await sincronizarMatching(naveganteId);
   }
   revalidatePath("/navegante");
 }

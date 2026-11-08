@@ -20,7 +20,7 @@ async function buscarEndereco(cep: string): Promise<Endereco | null> {
   }
 }
 
-export default function FormularioPorto() {
+export default function FormularioPorto({ nomeInicial = "" }: { nomeInicial?: string }) {
   const [estado, acao, pendente] = useActionState(adicionarPorto, inicial);
   const [endereco, setEndereco] = useState<Endereco>({ logradouro: "", bairro: "", cidade: "", uf: "" });
   const [cep, setCep] = useState("");
@@ -54,7 +54,7 @@ export default function FormularioPorto() {
 
       <div className={`campo ${e.nome ? "invalido" : ""}`}>
         <label htmlFor="porto-nome">Nome do porto</label>
-        <input id="porto-nome" name="nome" placeholder="Ex.: Associação de Moradores Vila X" />
+        <input id="porto-nome" name="nome" defaultValue={nomeInicial} placeholder="Ex.: Associação de Moradores Vila X" />
         {e.nome && <p className="erro-campo">{e.nome}</p>}
       </div>
 
