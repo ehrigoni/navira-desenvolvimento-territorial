@@ -360,6 +360,8 @@ p { margin-top: 0; }
 .lista li:first-child { border-top: 0; padding-top: var(--espaco-xs); }
 .lista li:last-child { padding-bottom: 0; }
 .lista li strong { color: var(--azul); }
+.lista li[role="option"] { cursor: pointer; }
+.lista li[role="option"].destacado { background: var(--fundo-suave, rgba(0, 0, 0, 0.05)); border-radius: 6px; }
 .destaque { color: var(--sucesso); font-weight: 600; }
 .vazio { color: var(--cinza); }
 .tag {

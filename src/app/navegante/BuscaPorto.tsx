@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState, useTransition, type KeyboardEvent } from "react";
 import { buscarPortos, vincularPorto, type PortoEncontrado } from "./actions";
 import FormularioPorto from "./FormularioPorto";
 
@@ -18,8 +18,10 @@ export default function BuscaPorto() {
   const [termo, setTermo] = useState("");
   const [resultados, setResultados] = useState<PortoEncontrado[]>([]);
   const [buscado, setBuscado] = useState(false);
+  const [destaque, setDestaque] = useState(0);
   const [cadastrando, setCadastrando] = useState(false);
-  const [pendente, iniciarTransicao] = useTransition();
+  const [buscando, iniciarBusca] = useTransition();
+  const [vinculando, iniciarVinculo] = useTransition();
 
   // Busca enquanto a pessoa digita (com atraso para não consultar a cada tecla).
   useEffect(() => {
@@ -30,15 +32,44 @@ export default function BuscaPorto() {
       return;
     }
     const timer = setTimeout(() => {
-      iniciarTransicao(async () => {
-        setResultados(await buscarPortos(busca));
+      iniciarBusca(async () => {
+        const encontrados = await buscarPortos(busca);
+        setResultados(encontrados);
+        setDestaque(0);
         setBuscado(true);
       });
     }, ESPERA_MS);
     return () => clearTimeout(timer);
   }, [termo]);
 
-  const semResultado = buscado && !pendente && resultados.length === 0 && termo.trim().length >= 2;
+  function vincular(porto: PortoEncontrado) {
+    if (porto.vinculado) return;
+    const dados = new FormData();
+    dados.set("portoId", porto.id);
+    iniciarVinculo(async () => {
+      await vincularPorto(dados);
+      setTermo("");
+      setResultados([]);
+      setBuscado(false);
+    });
+  }
+
+  function aoPressionarTecla(evento: KeyboardEvent<HTMLInputElement>) {
+    if (evento.key === "ArrowDown" && resultados.length > 0) {
+      evento.preventDefault();
+      setDestaque((atual) => (atual + 1) % resultados.length);
+    } else if (evento.key === "ArrowUp" && resultados.length > 0) {
+      evento.preventDefault();
+      setDestaque((atual) => (atual - 1 + resultados.length) % resultados.length);
+    } else if (evento.key === "Enter") {
+      evento.preventDefault();
+      const selecionado = resultados[destaque];
+      if (selecionado) vincular(selecionado);
+      else if (semResultado) setCadastrando(true);
+    }
+  }
+
+  const semResultado = buscado && !buscando && resultados.length === 0 && termo.trim().length >= 2;
 
   return (
     <div className="busca-porto">
@@ -48,47 +79,54 @@ export default function BuscaPorto() {
           id="busca-porto"
           type="search"
           autoComplete="off"
+          role="combobox"
+          aria-expanded={resultados.length > 0}
+          aria-controls="resultados-porto"
+          aria-activedescendant={resultados.length > 0 ? `porto-opcao-${destaque}` : undefined}
           placeholder="Digite o nome da igreja, escola ou associação"
           value={termo}
+          disabled={vinculando}
           onChange={(evento) => {
             setTermo(evento.target.value);
             setCadastrando(false);
           }}
+          onKeyDown={aoPressionarTecla}
         />
-        <span className="ajuda">Os resultados aparecem enquanto você digita. Escolha o seu porto para se vincular a ele.</span>
+        <span className="ajuda">
+          Use as setas para escolher e Enter para se vincular. Sem resultado, Enter abre o cadastro de um novo porto.
+        </span>
       </div>
 
-      {pendente && <p className="ajuda">Buscando…</p>}
+      {buscando && <p className="ajuda">Buscando…</p>}
+      {vinculando && <p className="ajuda">Vinculando…</p>}
 
       {resultados.length > 0 && (
-        <ul className="lista" aria-label="Resultados da busca">
-          {resultados.map((porto) => (
-            <li key={porto.id}>
+        <ul id="resultados-porto" role="listbox" aria-label="Resultados da busca" className="lista">
+          {resultados.map((porto, indice) => (
+            <li
+              key={porto.id}
+              id={`porto-opcao-${indice}`}
+              role="option"
+              aria-selected={indice === destaque}
+              className={indice === destaque ? "destacado" : undefined}
+              onMouseEnter={() => setDestaque(indice)}
+              onClick={() => vincular(porto)}
+            >
               <strong>{porto.nome}</strong>{" "}
               <span className="ajuda">
                 · {ROTULO_TIPO[porto.tipo ?? ""] ?? "porto"} · {porto.cidade ?? "—"}/{porto.uf ?? "—"}
                 {porto.cep ? ` · CEP ${porto.cep}` : ""}
               </span>
-              {porto.vinculado ? (
-                <span className="tag">Já vinculado</span>
-              ) : (
-                <form action={vincularPorto}>
-                  <input type="hidden" name="portoId" value={porto.id} />
-                  <button className="botao secundario" type="submit">Sou deste porto</button>
-                </form>
-              )}
+              {porto.vinculado && <span className="tag">Já vinculado</span>}
             </li>
           ))}
         </ul>
       )}
 
       {semResultado && !cadastrando && (
-        <div>
-          <p className="vazio">Nenhum porto encontrado para &ldquo;{termo.trim()}&rdquo;.</p>
-          <button className="botao" type="button" onClick={() => setCadastrando(true)}>
-            Cadastrar &ldquo;{termo.trim()}&rdquo; como novo porto
-          </button>
-        </div>
+        <p className="vazio">
+          Nenhum porto encontrado para &ldquo;{termo.trim()}&rdquo;. Pressione Enter para cadastrá-lo como novo porto.
+        </p>
       )}
 
       {cadastrando && <FormularioPorto nomeInicial={termo.trim()} />}
