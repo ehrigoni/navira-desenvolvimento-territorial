@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -25,13 +26,16 @@ export default async function PaginaEthos({
     },
   });
   if (!navegante) redirect("/entrar");
-  if (navegante.ethosConcluidoEm) redirect("/navegante");
+
+  // Após a conclusão o questionário continua acessível para edição, com todas as etapas desbloqueadas.
+  const concluido = navegante.ethosConcluidoEm != null;
+  const blocoSalvo = navegante.ethosBlocoAtual;
+  const blocoMaximo = concluido ? BLOCOS_ETHOS.length - 1 : blocoSalvo;
 
   const { bloco: blocoParam } = await searchParams;
-  const blocoSalvo = navegante.ethosBlocoAtual;
-  const blocoSolicitado = Number(blocoParam ?? blocoSalvo);
+  const blocoSolicitado = Number(blocoParam ?? (concluido ? 0 : blocoSalvo));
   if (!Number.isInteger(blocoSolicitado) || blocoSolicitado < 0) redirect(`/navegante/ethos?bloco=${blocoSalvo}`);
-  if (blocoSolicitado > blocoSalvo) redirect(`/navegante/ethos?bloco=${blocoSalvo}`);
+  if (blocoSolicitado > blocoMaximo) redirect(`/navegante/ethos?bloco=${blocoMaximo}`);
 
   const bloco = BLOCOS_ETHOS[blocoSolicitado];
   if (!bloco) redirect(`/navegante/ethos?bloco=${blocoSalvo}`);
@@ -60,6 +64,34 @@ export default async function PaginaEthos({
 
   return (
     <main className={`central questionario-page ${bloco.numero === 10 ? "questionario-final" : ""}`}>
+      <nav className="ethos-navegacao" aria-label="Etapas do questionário">
+        <ol>
+          {BLOCOS_ETHOS.map((item) => {
+            const desbloqueado = item.numero <= blocoMaximo;
+            const atual = item.numero === bloco.numero;
+            return (
+              <li key={item.numero}>
+                {desbloqueado ? (
+                  <Link
+                    className={`ethos-navegacao-item ${atual ? "atual" : ""}`}
+                    href={`/navegante/ethos?bloco=${item.numero}`}
+                    aria-current={atual ? "step" : undefined}
+                  >
+                    <span className="ethos-navegacao-numero" aria-hidden="true">{item.numero + 1}</span>
+                    <span className="ethos-navegacao-titulo">{item.titulo}</span>
+                  </Link>
+                ) : (
+                  <span className="ethos-navegacao-item bloqueado" title="Preencha as etapas anteriores para desbloquear">
+                    <span className="ethos-navegacao-numero" aria-hidden="true">🔒</span>
+                    <span className="ethos-navegacao-titulo">{item.titulo}</span>
+                    <span className="sr-only">(etapa bloqueada)</span>
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
       <div className="questionario-progresso">
         <div className="questionario-progresso-texto">
           <span>Perfil de Travessia</span>

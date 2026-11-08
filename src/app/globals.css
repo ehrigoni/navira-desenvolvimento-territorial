@@ -249,6 +249,36 @@ p { margin-top: 0; }
 .grupo-opcoes legend { margin-bottom: var(--espaco-xs); }
 
 .questionario-page { width: min(100% - 40px, 720px); max-width: 720px; }
+.ethos-navegacao { margin-bottom: var(--espaco-lg); }
+.ethos-navegacao ol {
+  display: flex;
+  gap: var(--espaco-xs);
+  padding: 4px 2px;
+  margin: 0;
+  overflow-x: auto;
+  list-style: none;
+  -webkit-overflow-scrolling: touch;
+}
+.ethos-navegacao li { flex: 0 0 auto; }
+.ethos-navegacao-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 5px 12px;
+  border: 1px solid var(--borda);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--azul);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+a.ethos-navegacao-item:hover { background: #f3f8f8; border-color: var(--azul-medio); }
+.ethos-navegacao-item.atual { background: var(--azul); border-color: var(--azul); color: var(--branco); }
+.ethos-navegacao-item.bloqueado { background: #eef2f3; color: var(--cinza); cursor: not-allowed; }
+.ethos-navegacao-numero { font-size: 0.78rem; }
 .questionario-progresso { margin-bottom: var(--espaco-xl); }
 .questionario-progresso-texto {
   display: flex;
@@ -409,6 +439,7 @@ p { margin-top: 0; }
 }
 
 .painel-cabecalho .subtitulo { margin-bottom: 0; }
+.acao-editar-ethos { margin: calc(-1 * var(--espaco-md)) 0 var(--espaco-xl); }
 .grade-cidade { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: var(--espaco-md); }
 .campo .opcoes-rotulo { margin-bottom: 0; }
 .aviso-espacado { margin-bottom: var(--espaco-md); }

@@ -41,14 +41,16 @@ export async function salvarBlocoEthos(_: EstadoBlocoEthos, formData: FormData):
     select: { id: true, ethosBlocoAtual: true, ethosConcluidoEm: true },
   });
   if (!navegante) redirect("/entrar");
-  if (navegante.ethosConcluidoEm) redirect("/navegante");
+  const concluido = navegante.ethosConcluidoEm != null;
 
   const blocoNumero = Number(formData.get("bloco"));
   const bloco = BLOCOS_ETHOS[blocoNumero];
   if (!Number.isInteger(blocoNumero) || !bloco) return { erro: "Bloco do questionário inválido." };
 
   const blocoAtual = navegante.ethosBlocoAtual;
-  if (blocoNumero > blocoAtual) redirect(`/navegante/ethos?bloco=${blocoAtual}`);
+  // Com o Ethos concluído, todas as etapas ficam desbloqueadas para edição.
+  const blocoMaximo = concluido ? BLOCOS_ETHOS.length - 1 : blocoAtual;
+  if (blocoNumero > blocoMaximo) redirect(`/navegante/ethos?bloco=${blocoMaximo}`);
 
   const respostasSalvas = await db.respostaEthos.findMany({
     where: { naveganteId: navegante.id },
@@ -89,7 +91,6 @@ export async function salvarBlocoEthos(_: EstadoBlocoEthos, formData: FormData):
       ? 0
       : Math.min(BLOCOS_ETHOS.length - 1, blocoNumero + 1);
   const concluiu = !recusado && intent === "avancar" && blocoNumero === BLOCOS_ETHOS.length - 1;
-
   // Etapa 1: dados sensíveis são cifrados e nunca gravados em claro (nem em RespostaEthos).
   let dadosSensiveis: { racaCorCifrado: string | null; religiaoCifrado: string | null } | null = null;
   if (blocoNumero === 1) {
@@ -181,11 +182,12 @@ export async function salvarBlocoEthos(_: EstadoBlocoEthos, formData: FormData):
       await tx.navegante.update({
         where: { id: navegante.id },
         data: {
-          ethosBlocoAtual: recusado ? 0 : proximoBloco,
+          // Revisitar uma etapa já preenchida nunca bloqueia de novo as etapas seguintes.
+          ethosBlocoAtual: recusado ? 0 : Math.max(blocoAtual, proximoBloco),
           ethosStatus: recusado
             ? EthosStatus.NAO_INICIADO
-            : concluiu ? EthosStatus.CONCLUIDO : EthosStatus.EM_ANDAMENTO,
-          ethosConcluidoEm: concluiu ? agora : undefined,
+            : concluiu || concluido ? EthosStatus.CONCLUIDO : EthosStatus.EM_ANDAMENTO,
+          ethosConcluidoEm: recusado ? null : concluiu ? agora : undefined,
         },
       });
     });
@@ -194,8 +196,9 @@ export async function salvarBlocoEthos(_: EstadoBlocoEthos, formData: FormData):
     return { erro: "Não foi possível salvar suas respostas. Tente novamente." };
   }
 
-  // Mudança de Ethos: regrava o [Matching-Navegante] (só quando concluído, que é quando o perfil fica completo).
-  if (concluiu) await sincronizarMatching(navegante.id);
+  // Mudança de Ethos: regrava o [Matching-Navegante] sempre que o perfil completo pode ter mudado
+  // (conclusão ou edição de quem já concluiu).
+  if (concluiu || (concluido && !recusado)) await sincronizarMatching(navegante.id);
 
   if (concluiu) redirect("/navegante");
   if (intent === "voltar") redirect(`/navegante/ethos?bloco=${proximoBloco}`);

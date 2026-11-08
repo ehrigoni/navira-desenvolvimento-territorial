@@ -117,6 +117,10 @@ export default async function PainelNavegante({
         </form>
       </header>
 
+      <div className="acao-editar-ethos">
+        <Link className="botao secundario" href="/navegante/ethos">Editar Ethos</Link>
+      </div>
+
       <section className="cartao painel-portos">
         <h2>Meus portos</h2>
         {portos.length === 0 ? (
