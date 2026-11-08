@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/auth";
 import { sincronizarMatching } from "@/lib/sincronizar-matching";
+import { formatarFaixaSalarial } from "@/lib/matching";
 import { apenasDigitos } from "@/lib/validacao";
 
 export type EstadoAcao = { erro?: string; erros?: Record<string, string>; sucesso?: string };
@@ -207,5 +208,93 @@ export async function vincularPorto(formData: FormData) {
     });
     await sincronizarMatching(naveganteId);
   }
+  revalidatePath("/navegante");
+}
+
+export type ItemBusca = { id: string; titulo: string; detalhe: string; escolhido: boolean; indice?: number };
+
+function padraoBusca(termo: string) {
+  // unaccent + ILIKE; escapa % e _ para que o texto digitado seja literal.
+  return `%${termo.trim().slice(0, 100).replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+}
+
+const MODALIDADE_CURTA: Record<string, string> = { PRESENCIAL: "presencial", REMOTA: "online", HIBRIDA: "presencial e online" };
+
+/** Busca vagas ativas pelo título ou pela empresa (enquanto a pessoa digita). */
+export async function buscarVagas(termo: string): Promise<ItemBusca[]> {
+  const naveganteId = await navegantePorSessao();
+  if (termo.trim().length < 2) return [];
+  const padrao = padraoBusca(termo);
+  const linhas = await db.$queryRaw<{ id: string; titulo: string; razao: string; cidade: string | null; uf: string | null; min: number | null; max: number | null; escolhido: boolean }[]>(Prisma.sql`
+    SELECT v.id, v.titulo, d."razaoSocial" AS razao, d.cidade, d.uf,
+           v."salarioMinCentavos" AS min, v."salarioMaxCentavos" AS max,
+           EXISTS (SELECT 1 FROM "VagaNavegante" vn WHERE vn."vagaId" = v.id AND vn."naveganteId" = ${naveganteId}) AS escolhido
+    FROM "Vaga" v
+    JOIN "Destino" d ON d.id = v."destinoId"
+    WHERE v.ativa
+      AND (unaccent(v.titulo) ILIKE unaccent(${padrao}) OR unaccent(d."razaoSocial") ILIKE unaccent(${padrao}))
+    ORDER BY v.titulo
+    LIMIT 8`);
+  return linhas.map((l) => ({
+    id: l.id,
+    titulo: l.titulo,
+    detalhe: [l.razao, l.cidade && l.uf ? `${l.cidade}/${l.uf}` : null, formatarFaixaSalarial(l.min, l.max)].filter(Boolean).join(" · "),
+    escolhido: l.escolhido,
+  }));
+}
+
+/** Busca cursos cadastrados pelo nome (enquanto a pessoa digita). */
+export async function buscarCursos(termo: string): Promise<ItemBusca[]> {
+  const naveganteId = await navegantePorSessao();
+  if (termo.trim().length < 2) return [];
+  const padrao = padraoBusca(termo);
+  const linhas = await db.$queryRaw<{ id: string; nome: string; carga: number; modalidade: string; instituicao: string | null; escolhido: boolean }[]>(Prisma.sql`
+    SELECT c.id, c.nome, c."cargaHorariaHoras" AS carga, c.modalidade::text AS modalidade, c."instituicaoEnsino" AS instituicao,
+           EXISTS (SELECT 1 FROM "CursoNavegante" cn WHERE cn."cursoId" = c.id AND cn."naveganteId" = ${naveganteId}) AS escolhido
+    FROM "Curso" c
+    WHERE unaccent(c.nome) ILIKE unaccent(${padrao})
+    ORDER BY c.nome
+    LIMIT 8`);
+  return linhas.map((l) => ({
+    id: l.id,
+    titulo: l.nome,
+    detalhe: [`${l.carga}h`, MODALIDADE_CURTA[l.modalidade] ?? l.modalidade.toLowerCase(), l.instituicao].filter(Boolean).join(" · "),
+    escolhido: l.escolhido,
+  }));
+}
+
+/** Escolhe uma vaga (Enter na busca). Idempotente. */
+export async function escolherVaga(formData: FormData) {
+  const naveganteId = await navegantePorSessao();
+  const vagaId = texto(formData, "vagaId");
+  const vaga = await db.vaga.findFirst({ where: { id: vagaId, ativa: true }, select: { id: true } });
+  if (vaga) {
+    await db.vagaNavegante.upsert({ where: { naveganteId_vagaId: { naveganteId, vagaId } }, create: { naveganteId, vagaId }, update: {} });
+  }
+  revalidatePath("/navegante");
+}
+
+/** Escolhe um curso (Enter na busca). Idempotente. */
+export async function escolherCurso(formData: FormData) {
+  const naveganteId = await navegantePorSessao();
+  const cursoId = texto(formData, "cursoId");
+  const curso = await db.curso.findUnique({ where: { id: cursoId }, select: { id: true } });
+  if (curso) {
+    await db.cursoNavegante.upsert({ where: { naveganteId_cursoId: { naveganteId, cursoId } }, create: { naveganteId, cursoId }, update: {} });
+  }
+  revalidatePath("/navegante");
+}
+
+/** Remove uma vaga da lista de escolhidas. */
+export async function removerVagaEscolhida(formData: FormData) {
+  const naveganteId = await navegantePorSessao();
+  await db.vagaNavegante.deleteMany({ where: { naveganteId, vagaId: texto(formData, "vagaId") } });
+  revalidatePath("/navegante");
+}
+
+/** Remove um curso da lista de escolhidos. */
+export async function removerCursoEscolhido(formData: FormData) {
+  const naveganteId = await navegantePorSessao();
+  await db.cursoNavegante.deleteMany({ where: { naveganteId, cursoId: texto(formData, "cursoId") } });
   revalidatePath("/navegante");
 }

@@ -369,6 +369,22 @@ p { margin-top: 0; }
 .lista li:last-child { padding-bottom: 0; }
 .lista li strong { color: var(--azul); }
 .lista li[role="option"] { cursor: pointer; }
+.form-remover-porto { display: inline; margin: 0 0 0 var(--espaco-xs); }
+.botao-x {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--azul-medio);
+  border-radius: 999px;
+  background: var(--azul-medio);
+  color: var(--branco);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  vertical-align: middle;
+}
+.botao-x:hover { background: var(--azul); border-color: var(--azul); }
 .lista li[role="option"].destacado { background: var(--fundo-suave, rgba(0, 0, 0, 0.05)); border-radius: 6px; }
 .destaque { color: var(--sucesso); font-weight: 600; }
 .vazio { color: var(--cinza); }
@@ -416,3 +432,38 @@ p { margin-top: 0; }
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Painéis do dashboard do Navegante, pintados com a paleta da marca. */
+.painel-portos { background: var(--azul); border-color: var(--azul); }
+.painel-portos, .painel-portos h2, .painel-portos h3, .painel-portos p,
+.painel-portos .lista li, .painel-portos .lista li strong, .painel-portos .campo label,
+.painel-portos .ajuda, .painel-portos .vazio { color: var(--branco); }
+.painel-portos .lista li { border-top-color: rgb(247 247 245 / 25%); }
+.painel-portos .campo input, .painel-portos .campo select, .painel-portos .campo textarea { color: var(--tinta); }
+.painel-portos a { color: var(--branco); }
+.painel-portos .botao:not(.secundario) { background: var(--branco); color: var(--azul); }
+.painel-portos .botao.secundario { background: var(--branco); color: var(--azul); border-color: var(--branco); }
+.painel-portos .botao-x { border-color: var(--branco); }
+
+.painel-vagas { background: var(--verde); border-color: var(--verde); }
+.painel-cursos { background: var(--dourado); border-color: var(--dourado); }
+.painel-vagas, .painel-vagas h2, .painel-vagas h3, .painel-vagas p,
+.painel-vagas .lista li, .painel-vagas .lista li strong, .painel-vagas .campo label,
+.painel-vagas .ajuda, .painel-vagas .vazio, .painel-vagas a,
+.painel-cursos, .painel-cursos h2, .painel-cursos h3, .painel-cursos p,
+.painel-cursos .lista li, .painel-cursos .lista li strong, .painel-cursos .campo label,
+.painel-cursos .ajuda, .painel-cursos .vazio, .painel-cursos a { color: var(--tinta); }
+.painel-vagas .lista li, .painel-cursos .lista li { border-top-color: rgb(29 29 29 / 25%); }
+.painel-vagas .botao.secundario, .painel-cursos .botao.secundario { background: var(--branco); color: var(--azul); border-color: var(--branco); }
+.painel-vagas .botao:not(.secundario), .painel-cursos .botao:not(.secundario) { background: var(--azul); color: var(--branco); }
+.painel-vagas .tag, .painel-cursos .tag { background: var(--branco); color: var(--tinta); }
+
+/* Cursos realizados e o formulário de cadastro, na mesma cor (azul médio da marca). */
+.painel-realizados { background: var(--azul-medio); border-color: var(--azul-medio); }
+.painel-realizados, .painel-realizados h2, .painel-realizados h3, .painel-realizados p,
+.painel-realizados .lista li, .painel-realizados .lista li strong, .painel-realizados .campo label,
+.painel-realizados .ajuda, .painel-realizados .vazio, .painel-realizados a { color: var(--branco); }
+.painel-realizados .lista li { border-top-color: rgb(247 247 245 / 25%); }
+.painel-realizados .campo input, .painel-realizados .campo select, .painel-realizados .campo textarea { color: var(--tinta); }
+.painel-realizados .botao:not(.secundario) { background: var(--branco); color: var(--azul); }
+.painel-realizados .botao.secundario { background: var(--branco); color: var(--azul); border-color: var(--branco); }

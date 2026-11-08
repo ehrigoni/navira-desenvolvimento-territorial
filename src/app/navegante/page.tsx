@@ -4,14 +4,29 @@ import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/auth";
 import { calcularIndiceLocal, formatarFaixaSalarial } from "@/lib/matching";
 import BuscaPorto from "./BuscaPorto";
+import BuscaEscolha from "./BuscaEscolha";
 import FormularioCursoRealizado from "./FormularioCursoRealizado";
-import { alternarCurso, alternarVaga, removerCursoRealizado, removerPorto } from "./actions";
+import {
+  buscarCursos,
+  buscarVagas,
+  escolherCurso,
+  escolherVaga,
+  removerCursoEscolhido,
+  removerCursoRealizado,
+  removerPorto,
+  removerVagaEscolhida,
+  type ItemBusca,
+} from "./actions";
 
 const MODALIDADE_ROTULO: Record<string, string> = { PRESENCIAL: "presencial", REMOTA: "online", HIBRIDA: "presencial e online" };
 
-export default async function PainelNavegante({ searchParams }: { searchParams: Promise<{ vagas?: string; cursos?: string }> }) {
+export default async function PainelNavegante({
+  searchParams,
+}: {
+  searchParams: Promise<{ vagas?: string; cursos?: string; incluir?: string }>;
+}) {
   const sessao = await exigirSessao("NAVEGANTE");
-  const { vagas: verVagas, cursos: verCursos } = await searchParams;
+  const { vagas: verVagas, cursos: verCursos, incluir } = await searchParams;
 
   const navegante = await db.navegante.findUnique({
     where: { usuarioId: sessao.sub },
@@ -29,7 +44,7 @@ export default async function PainelNavegante({ searchParams }: { searchParams: 
   const escolhidasVagas = new Set(navegante.vagas.map((v) => v.vagaId));
   const escolhidosCursos = new Set(navegante.cursos.map((c) => c.cursoId));
 
-  // Vagas: "Minhas vagas" mostra as que têm proximidade com algum porto; "todas" mostra todas as ativas.
+  // Vagas recomendadas: próximas dos portos; "todas" mostra todas as ativas.
   const vagasAtivas = await db.vaga.findMany({
     where: { ativa: true },
     include: {
@@ -47,9 +62,21 @@ export default async function PainelNavegante({ searchParams }: { searchParams: 
     .sort((a, b) => b.indice - a.indice);
   const mostrarTodasVagas = verVagas === "todas";
   const vagas = (mostrarTodasVagas ? vagasRankeadas : vagasRankeadas.filter((v) => v.indice > 0)).slice(0, mostrarTodasVagas ? 100 : 20);
+  const recomendadasVagas: ItemBusca[] = vagas.map(({ vaga, indice }) => ({
+    id: vaga.id,
+    titulo: vaga.titulo,
+    detalhe: [
+      vaga.destino.razaoSocial,
+      vaga.destino.cidade && vaga.destino.uf ? `${vaga.destino.cidade}/${vaga.destino.uf}` : null,
+      formatarFaixaSalarial(vaga.salarioMinCentavos, vaga.salarioMaxCentavos),
+      vaga.cursos.length > 0 ? `Cursos exigidos: ${vaga.cursos.map((c) => c.curso.nome).join(", ")}` : null,
+    ].filter(Boolean).join(" · "),
+    escolhido: escolhidasVagas.has(vaga.id),
+    indice,
+  }));
   const vagasEscolhidas = vagasAtivas.filter((v) => escolhidasVagas.has(v.id));
 
-  // Cursos: "Meus cursos" mostra os próximos dos portos; "todos" mostra todos.
+  // Cursos recomendados: próximos dos portos; "todos" mostra todos.
   const cursosDisponiveis = await db.curso.findMany({
     include: { destino: { select: { cep: true, cidade: true, uf: true } } },
     orderBy: { nome: "asc" },
@@ -63,7 +90,20 @@ export default async function PainelNavegante({ searchParams }: { searchParams: 
     .sort((a, b) => b.indice - a.indice);
   const mostrarTodosCursos = verCursos === "todos";
   const cursos = (mostrarTodosCursos ? cursosRankeados : cursosRankeados.filter((c) => c.indice > 0)).slice(0, mostrarTodosCursos ? 100 : 20);
+  const recomendadosCursos: ItemBusca[] = cursos.map(({ curso, indice }) => ({
+    id: curso.id,
+    titulo: curso.nome,
+    detalhe: [
+      `${curso.cargaHorariaHoras}h`,
+      MODALIDADE_ROTULO[curso.modalidade] ?? curso.modalidade.toLowerCase(),
+      curso.instituicaoEnsino,
+    ].filter(Boolean).join(" · "),
+    escolhido: escolhidosCursos.has(curso.id),
+    indice,
+  }));
   const cursosEscolhidos = cursosDisponiveis.filter((c) => escolhidosCursos.has(c.id));
+
+  const mostrarFormularioCurso = incluir === "curso";
 
   return (
     <main className="conteudo">
@@ -77,7 +117,7 @@ export default async function PainelNavegante({ searchParams }: { searchParams: 
         </form>
       </header>
 
-      <section className="cartao">
+      <section className="cartao painel-portos">
         <h2>Meus portos</h2>
         {portos.length === 0 ? (
           <p className="vazio">Você ainda não está inscrito em nenhum porto.</p>
@@ -86,14 +126,15 @@ export default async function PainelNavegante({ searchParams }: { searchParams: 
             {navegante.portos.map(({ porto }) => (
               <li key={porto.id}>
                 <strong>{porto.nome}</strong>{" "}
+                <form action={removerPorto} className="form-remover-porto">
+                  <input type="hidden" name="portoId" value={porto.id} />
+                  <button className="botao-x" type="submit" aria-label={`Remover ${porto.nome}`} title="Remover porto">×</button>
+                </form>
+                <br />
                 <span className="ajuda">
                   · {[porto.logradouro, porto.numero, porto.bairro].filter(Boolean).join(", ") || "endereço não informado"}
                   {" · "}{porto.cidade ?? "—"}/{porto.uf ?? "—"} · CEP {porto.cep ?? "—"}
                 </span>
-                <form action={removerPorto}>
-                  <input type="hidden" name="portoId" value={porto.id} />
-                  <button className="botao secundario" type="submit">Remover</button>
-                </form>
               </li>
             ))}
           </ul>
@@ -102,7 +143,7 @@ export default async function PainelNavegante({ searchParams }: { searchParams: 
         <BuscaPorto />
       </section>
 
-      <section className="cartao">
+      <section className="cartao painel-vagas">
         <h2>{mostrarTodasVagas ? "Todas as vagas" : "Minhas vagas"}</h2>
         <p className="ajuda">
           {mostrarTodasVagas
@@ -116,48 +157,37 @@ export default async function PainelNavegante({ searchParams }: { searchParams: 
             <Link href="/navegante?vagas=todas">Ver todas as vagas</Link>
           )}
         </p>
-        {vagas.length === 0 ? (
-          <p className="vazio">Nenhuma vaga próxima dos seus portos no momento.</p>
-        ) : (
-          <ul className="lista">
-            {vagas.map(({ vaga, indice }) => (
-              <li key={vaga.id}>
-                <strong>{vaga.titulo}</strong>
-                <span className="tag">Índice {indice}</span>
-                <div className="ajuda">
-                  {[
-                    vaga.destino.razaoSocial,
-                    vaga.destino.cidade && vaga.destino.uf ? `${vaga.destino.cidade}/${vaga.destino.uf}` : null,
-                    formatarFaixaSalarial(vaga.salarioMinCentavos, vaga.salarioMaxCentavos),
-                  ].filter(Boolean).join(" · ")}
-                </div>
-                {vaga.descricao && <p className="descricao-vaga">{vaga.descricao}</p>}
-                {vaga.cursos.length > 0 && (
-                  <div className="ajuda">Cursos exigidos: {vaga.cursos.map((c) => c.curso.nome).join(", ")}</div>
-                )}
-                <form action={alternarVaga}>
-                  <input type="hidden" name="vagaId" value={vaga.id} />
-                  <button className="botao secundario" type="submit">
-                    {escolhidasVagas.has(vaga.id) ? "Remover da lista" : "Escolher vaga"}
-                  </button>
-                </form>
-              </li>
-            ))}
-          </ul>
-        )}
+        <BuscaEscolha
+          id="busca-vaga"
+          rotulo="Buscar vaga"
+          placeholder="Digite o cargo ou a empresa"
+          ajuda="Use as setas para escolher e Enter para marcar a vaga."
+          recomendados={recomendadasVagas}
+          buscar={buscarVagas}
+          escolher={escolherVaga}
+          campo="vagaId"
+          vazio="Nenhuma vaga próxima dos seus portos no momento."
+        />
         <h3>Vagas escolhidas</h3>
         {vagasEscolhidas.length === 0 ? (
           <p className="vazio">Você ainda não escolheu vagas.</p>
         ) : (
           <ul className="lista">
             {vagasEscolhidas.map((vaga) => (
-              <li key={vaga.id}><strong>{vaga.titulo}</strong> <span className="ajuda">· {vaga.destino.razaoSocial}</span></li>
+              <li key={vaga.id}>
+                <strong>{vaga.titulo}</strong>{" "}
+                <form action={removerVagaEscolhida} className="form-remover-porto">
+                  <input type="hidden" name="vagaId" value={vaga.id} />
+                  <button className="botao-x" type="submit" aria-label={`Remover ${vaga.titulo}`} title="Remover vaga">×</button>
+                </form>
+                <div className="ajuda">{vaga.destino.razaoSocial}</div>
+              </li>
             ))}
           </ul>
         )}
       </section>
 
-      <section className="cartao">
+      <section className="cartao painel-cursos">
         <h2>{mostrarTodosCursos ? "Todos os cursos" : "Meus cursos"}</h2>
         <p className="ajuda">
           {mostrarTodosCursos
@@ -171,37 +201,36 @@ export default async function PainelNavegante({ searchParams }: { searchParams: 
             <Link href="/navegante?cursos=todos">Ver todos os cursos</Link>
           )}
         </p>
-        {cursos.length === 0 ? (
-          <p className="vazio">Nenhum curso próximo dos seus portos no momento.</p>
-        ) : (
-          <ul className="lista">
-            {cursos.map(({ curso }) => (
-              <li key={curso.id}>
-                <strong>{curso.nome}</strong>{" "}
-                <span className="ajuda">· {curso.cargaHorariaHoras}h · {MODALIDADE_ROTULO[curso.modalidade] ?? curso.modalidade.toLowerCase()}{curso.instituicaoEnsino ? ` · ${curso.instituicaoEnsino}` : ""}</span>
-                <form action={alternarCurso}>
-                  <input type="hidden" name="cursoId" value={curso.id} />
-                  <button className="botao secundario" type="submit">
-                    {escolhidosCursos.has(curso.id) ? "Remover da lista" : "Escolher curso"}
-                  </button>
-                </form>
-              </li>
-            ))}
-          </ul>
-        )}
+        <BuscaEscolha
+          id="busca-curso"
+          rotulo="Buscar curso"
+          placeholder="Digite o nome do curso"
+          ajuda="Use as setas para escolher e Enter para marcar o curso."
+          recomendados={recomendadosCursos}
+          buscar={buscarCursos}
+          escolher={escolherCurso}
+          campo="cursoId"
+          vazio="Nenhum curso próximo dos seus portos no momento."
+        />
         <h3>Cursos escolhidos</h3>
         {cursosEscolhidos.length === 0 ? (
           <p className="vazio">Você ainda não escolheu cursos.</p>
         ) : (
           <ul className="lista">
             {cursosEscolhidos.map((curso) => (
-              <li key={curso.id}><strong>{curso.nome}</strong></li>
+              <li key={curso.id}>
+                <strong>{curso.nome}</strong>{" "}
+                <form action={removerCursoEscolhido} className="form-remover-porto">
+                  <input type="hidden" name="cursoId" value={curso.id} />
+                  <button className="botao-x" type="submit" aria-label={`Remover ${curso.nome}`} title="Remover curso">×</button>
+                </form>
+              </li>
             ))}
           </ul>
         )}
       </section>
 
-      <section className="cartao">
+      <section className="cartao painel-realizados" id="cursos-realizados">
         <h2>Cursos realizados</h2>
         {navegante.CursoRealizado.length === 0 ? (
           <p className="vazio">Você ainda não registrou cursos realizados.</p>
@@ -223,8 +252,20 @@ export default async function PainelNavegante({ searchParams }: { searchParams: 
             ))}
           </ul>
         )}
-        <h3>Registrar curso realizado</h3>
-        <FormularioCursoRealizado />
+        {!mostrarFormularioCurso && (
+          <p>
+            <Link className="botao" href="/navegante?incluir=curso#cursos-realizados">Incluir curso</Link>
+          </p>
+        )}
+        {mostrarFormularioCurso && (
+          <>
+            <h3>Registrar curso realizado</h3>
+            <FormularioCursoRealizado />
+            <p>
+              <Link href="/navegante#cursos-realizados">Cancelar</Link>
+            </p>
+          </>
+        )}
       </section>
     </main>
   );
