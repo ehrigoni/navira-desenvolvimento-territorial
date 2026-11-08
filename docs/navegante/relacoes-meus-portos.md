@@ -1,6 +1,6 @@
 # Relações do painel "Meus portos"
 
-Estrutura pedida em `Meus portos.docx` ("Sistema de Matching", itens 1 a 8), como ela existe no banco
+Estrutura pedida em [`meusPortos.md`](./meusPortos.md) ("Sistema de Matching", itens 1 a 8), como ela existe no banco
 (`prisma/schema.prisma`).
 
 | # | Regra | Como está no banco |

@@ -9,3 +9,8 @@ next-env.d.ts
 
 # Arquivo local com credenciais (PGUSER/PGPASSWORD)
 /env
+.vercel
+.env*
+
+# macOS
+.DS_Store

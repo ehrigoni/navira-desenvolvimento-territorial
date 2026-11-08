@@ -5,7 +5,7 @@ Aplicação construída a partir dos documentos em [docs/](docs/). Stack: Next.j
 ## Rodar localmente
 
 1. PostgreSQL com um banco `navira`.
-2. `cp .env.example .env` e ajuste `DATABASE_URL` e `SESSION_SECRET` (gere com `openssl rand -hex 32`).
+2. `cp .env.example .env` e ajuste `DATABASE_URL`, `SESSION_SECRET` (gere com `openssl rand -hex 32`) e `DATA_ENCRYPTION_KEY` (chave base64 de 32 bytes ou frase secreta com pelo menos 16 caracteres).
 3. `npm install`
 4. `npx prisma migrate dev` (cria as tabelas)
 5. `npm run db:seed` (dados de exemplo; senha de demonstração `navira2026`)
@@ -28,7 +28,7 @@ Logins de demonstração: navegante `(11) 91234-5678`, porto `porto@exemplo.com.
 
 ## O que ainda não foi feito
 
-- **Questionário Ethos:** `docs/navegante/questionarioEthos.md` está vazio. A rota `/navegante/ethos` existe, mas só mostra o aviso e leva ao painel.
+- **Questionário Ethos:** o Perfil de Travessia v1.0 é preenchido em 11 blocos, com salvamento de progresso; o Navegante só acessa o painel após concluir.
 - **Matching completo:** o índice usa só a proximidade (mesma cidade ou UF). Os pesos do Ethos, CNAE e cursos entram quando o Ethos existir.
 - **Envio de recuperação:** o link é gravado no log do servidor (`[recuperacao:email]`). Falta integrar Resend/SendGrid e Twilio.
 - **Indicadores** (Navira em Números, IIP, IDT): `docs/porto/*.ts` ainda não foram ligados ao app. Os models de `Contratacao` e `MunicipioPrioritario` do `indicadores.prisma` não entraram no schema.
