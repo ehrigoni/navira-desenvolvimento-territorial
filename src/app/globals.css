@@ -522,3 +522,8 @@ a.ethos-navegacao-item:hover { background: #f3f8f8; border-color: var(--azul-med
 .painel-realizados .campo input, .painel-realizados .campo select, .painel-realizados .campo textarea { color: var(--tinta); }
 .painel-realizados .botao:not(.secundario) { background: var(--branco); color: var(--azul); }
 .painel-realizados .botao.secundario { background: var(--branco); color: var(--azul); border-color: var(--branco); }
+
+/* Painel do porto: ações lado a lado e formulários de uma linha (cotas). */
+.acoes-porto { display: flex; flex-wrap: wrap; gap: var(--espaco-sm); margin-top: var(--espaco-sm); }
+.formulario-linha { display: flex; flex-wrap: wrap; align-items: center; gap: var(--espaco-xs); margin-top: var(--espaco-xs); }
+.formulario-linha input { width: 6rem; }

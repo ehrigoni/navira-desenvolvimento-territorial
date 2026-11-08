@@ -3,10 +3,12 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/auth";
 import { calcularIndiceLocal, formatarFaixaSalarial } from "@/lib/matching";
+import { CATEGORIA_INICIATIVA_ROTULO } from "@/lib/porto-regras";
 import BuscaPorto from "./BuscaPorto";
 import BuscaEscolha from "./BuscaEscolha";
 import FormularioCursoRealizado from "./FormularioCursoRealizado";
 import {
+  alternarApoioIniciativaNavegante,
   buscarCursos,
   buscarVagas,
   escolherCurso,
@@ -49,6 +51,7 @@ export default async function PainelNavegante({
     where: { ativa: true },
     include: {
       destino: { select: { razaoSocial: true, cnae: true, cep: true, cidade: true, uf: true } },
+      porto: { select: { nome: true, cep: true, cidade: true, uf: true } },
       cursos: { include: { curso: { select: { id: true, nome: true } } } },
     },
     orderBy: { criadaEm: "desc" },
@@ -57,7 +60,14 @@ export default async function PainelNavegante({
   const vagasRankeadas = vagasAtivas
     .map((vaga) => ({
       vaga,
-      indice: calcularIndiceLocal({ cep: vaga.cep ?? vaga.destino.cep, cidade: vaga.destino.cidade, uf: vaga.destino.uf }, portos),
+      indice: calcularIndiceLocal(
+        {
+          cep: vaga.cep ?? vaga.destino?.cep ?? vaga.porto?.cep,
+          cidade: vaga.destino?.cidade ?? vaga.porto?.cidade,
+          uf: vaga.destino?.uf ?? vaga.porto?.uf,
+        },
+        portos,
+      ),
     }))
     .sort((a, b) => b.indice - a.indice);
   const mostrarTodasVagas = verVagas === "todas";
@@ -66,8 +76,10 @@ export default async function PainelNavegante({
     id: vaga.id,
     titulo: vaga.titulo,
     detalhe: [
-      vaga.destino.razaoSocial,
-      vaga.destino.cidade && vaga.destino.uf ? `${vaga.destino.cidade}/${vaga.destino.uf}` : null,
+      vaga.destino?.razaoSocial ?? vaga.porto?.nome,
+      (vaga.destino?.cidade ?? vaga.porto?.cidade) && (vaga.destino?.uf ?? vaga.porto?.uf)
+        ? `${vaga.destino?.cidade ?? vaga.porto?.cidade}/${vaga.destino?.uf ?? vaga.porto?.uf}`
+        : null,
       formatarFaixaSalarial(vaga.salarioMinCentavos, vaga.salarioMaxCentavos),
       vaga.cursos.length > 0 ? `Cursos exigidos: ${vaga.cursos.map((c) => c.curso.nome).join(", ")}` : null,
     ].filter(Boolean).join(" · "),
@@ -78,14 +90,24 @@ export default async function PainelNavegante({
 
   // Cursos recomendados: próximos dos portos; "todos" mostra todos.
   const cursosDisponiveis = await db.curso.findMany({
-    include: { destino: { select: { cep: true, cidade: true, uf: true } } },
+    include: {
+      destino: { select: { cep: true, cidade: true, uf: true } },
+      porto: { select: { cep: true, cidade: true, uf: true } },
+    },
     orderBy: { nome: "asc" },
     take: 200,
   });
   const cursosRankeados = cursosDisponiveis
     .map((curso) => ({
       curso,
-      indice: calcularIndiceLocal({ cep: curso.cep ?? curso.destino?.cep, cidade: curso.destino?.cidade, uf: curso.destino?.uf }, portos),
+      indice: calcularIndiceLocal(
+        {
+          cep: curso.cep ?? curso.destino?.cep ?? curso.porto?.cep,
+          cidade: curso.destino?.cidade ?? curso.porto?.cidade,
+          uf: curso.destino?.uf ?? curso.porto?.uf,
+        },
+        portos,
+      ),
     }))
     .sort((a, b) => b.indice - a.indice);
   const mostrarTodosCursos = verCursos === "todos";
@@ -102,6 +124,17 @@ export default async function PainelNavegante({
     indice,
   }));
   const cursosEscolhidos = cursosDisponiveis.filter((c) => escolhidosCursos.has(c.id));
+
+  const iniciativas = portos.length === 0 ? [] : await db.iniciativaPorto.findMany({
+    where: { status: "ABERTO", portoId: { in: portos.map((p) => p.id) } },
+    include: {
+      Porto: { select: { nome: true } },
+      _count: { select: { ApoioIniciativa: true } },
+      ApoioIniciativa: { where: { naveganteId: navegante.id }, select: { id: true } },
+    },
+    orderBy: { criadaEm: "desc" },
+    take: 50,
+  });
 
   const mostrarFormularioCurso = incluir === "curso";
 
@@ -184,7 +217,7 @@ export default async function PainelNavegante({
                   <input type="hidden" name="vagaId" value={vaga.id} />
                   <button className="botao-x" type="submit" aria-label={`Remover ${vaga.titulo}`} title="Remover vaga">×</button>
                 </form>
-                <div className="ajuda">{vaga.destino.razaoSocial}</div>
+                <div className="ajuda">{vaga.destino?.razaoSocial ?? vaga.porto?.nome}</div>
               </li>
             ))}
           </ul>
@@ -230,6 +263,37 @@ export default async function PainelNavegante({
                 </form>
               </li>
             ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="cartao" id="iniciativas">
+        <h2>Iniciativas dos meus portos</h2>
+        <p className="ajuda">Ao apoiar uma iniciativa, você entra na lista de potenciais apoiadores do porto.</p>
+        {iniciativas.length === 0 ? (
+          <p className="vazio">Nenhuma iniciativa aberta nos seus portos.</p>
+        ) : (
+          <ul className="lista">
+            {iniciativas.map((iniciativa) => {
+              const apoiada = iniciativa.ApoioIniciativa.length > 0;
+              return (
+                <li key={iniciativa.id}>
+                  <strong>{iniciativa.titulo}</strong>{" "}
+                  <span className="tag">{CATEGORIA_INICIATIVA_ROTULO[iniciativa.categoria]}</span>
+                  <div className="ajuda">
+                    {iniciativa.Porto.nome} · {MODALIDADE_ROTULO[iniciativa.modalidade] ?? iniciativa.modalidade.toLowerCase()}
+                    {" · "}{iniciativa._count.ApoioIniciativa} apoiador(es)
+                  </div>
+                  <p className="descricao-vaga">{iniciativa.descricao}</p>
+                  <form action={alternarApoioIniciativaNavegante}>
+                    <input type="hidden" name="iniciativaId" value={iniciativa.id} />
+                    <button className={apoiada ? "botao secundario" : "botao"} type="submit">
+                      {apoiada ? "Deixar de apoiar" : "Apoiar iniciativa"}
+                    </button>
+                  </form>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

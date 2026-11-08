@@ -225,14 +225,17 @@ export async function buscarVagas(termo: string): Promise<ItemBusca[]> {
   const naveganteId = await navegantePorSessao();
   if (termo.trim().length < 2) return [];
   const padrao = padraoBusca(termo);
-  const linhas = await db.$queryRaw<{ id: string; titulo: string; razao: string; cidade: string | null; uf: string | null; min: number | null; max: number | null; escolhido: boolean }[]>(Prisma.sql`
-    SELECT v.id, v.titulo, d."razaoSocial" AS razao, d.cidade, d.uf,
+  // Vaga vem de uma empresa (Destino) ou de um porto (Vaga.portoId): o que estiver preenchido vale.
+  const linhas = await db.$queryRaw<{ id: string; titulo: string; razao: string | null; cidade: string | null; uf: string | null; min: number | null; max: number | null; escolhido: boolean }[]>(Prisma.sql`
+    SELECT v.id, v.titulo, COALESCE(d."razaoSocial", p.nome) AS razao,
+           COALESCE(d.cidade, p.cidade) AS cidade, COALESCE(d.uf, p.uf) AS uf,
            v."salarioMinCentavos" AS min, v."salarioMaxCentavos" AS max,
            EXISTS (SELECT 1 FROM "VagaNavegante" vn WHERE vn."vagaId" = v.id AND vn."naveganteId" = ${naveganteId}) AS escolhido
     FROM "Vaga" v
-    JOIN "Destino" d ON d.id = v."destinoId"
+    LEFT JOIN "Destino" d ON d.id = v."destinoId"
+    LEFT JOIN "Porto" p ON p.id = v."portoId"
     WHERE v.ativa
-      AND (unaccent(v.titulo) ILIKE unaccent(${padrao}) OR unaccent(d."razaoSocial") ILIKE unaccent(${padrao}))
+      AND (unaccent(v.titulo) ILIKE unaccent(${padrao}) OR unaccent(COALESCE(d."razaoSocial", p.nome, '')) ILIKE unaccent(${padrao}))
     ORDER BY v.titulo
     LIMIT 8`);
   return linhas.map((l) => ({
@@ -283,6 +286,22 @@ export async function escolherCurso(formData: FormData) {
     await db.cursoNavegante.upsert({ where: { naveganteId_cursoId: { naveganteId, cursoId } }, create: { naveganteId, cursoId }, update: {} });
   }
   revalidatePath("/navegante");
+}
+
+/** Coloca o navegante na lista de apoiadores de uma iniciativa de um dos seus portos (ou tira). */
+export async function alternarApoioIniciativaNavegante(formData: FormData) {
+  const naveganteId = await navegantePorSessao();
+  const iniciativaId = texto(formData, "iniciativaId");
+  const iniciativa = await db.iniciativaPorto.findFirst({
+    where: { id: iniciativaId, status: "ABERTO", Porto: { inscritos: { some: { naveganteId } } } },
+    select: { id: true },
+  });
+  if (iniciativa) {
+    const removido = await db.apoioIniciativa.deleteMany({ where: { iniciativaId, naveganteId } });
+    if (removido.count === 0) await db.apoioIniciativa.create({ data: { iniciativaId, naveganteId } });
+  }
+  revalidatePath("/navegante");
+  revalidatePath("/porto");
 }
 
 /** Remove uma vaga da lista de escolhidas. */

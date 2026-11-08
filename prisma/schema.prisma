@@ -47,6 +47,8 @@ model Navegante {
   dadosSensiveis      DadosSensiveis?
   FaixaCepNavegante   FaixaCepNavegante[]
   InscricaoIniciativa InscricaoIniciativa[]
+  ApoioIniciativa     ApoioIniciativa[]
+  Contratacao         Contratacao[]
   portos              InscricaoPorto[]
   MatchingNavegante   MatchingNavegante?
   usuario             Usuario               @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
@@ -79,41 +81,51 @@ model Consentimento {
 
 /// Território/organização (igreja, escola, associação, iniciativa). Tem CEP.
 model Porto {
-  id                 String              @id @default(cuid())
-  usuarioId          String?             @unique
-  nome               String
-  tipo               TipoPorto?
-  cep                String?
-  distrito           String?
-  populacaoEstimada  Int?
-  taxaDesempregoPct  Float?
-  rendaMediaCentavos Int?
-  latitude           Float?
-  longitude          Float?
-  criadoEm           DateTime            @default(now())
-  bairro             String?
-  cidade             String?
-  codigo             String?             @unique
-  complemento        String?
-  logradouro         String?
-  numero             String?
-  uf                 String?
-  atualizadoEm       DateTime            @default(now())
-  emailContato       String?
-  identificador      String?
-  nomeFantasia       String?
-  status             StatusPorto         @default(EM_ANALISE)
-  telefoneContato    String?
-  tipoIdentificador  TipoIdentificador   @default(SEM_REGISTRO)
-  CotaVaga           CotaVaga[]
-  empresas           EmpresaPorto[]
-  FormaRecebimento   FormaRecebimento[]
-  IniciativaPorto    IniciativaPorto[]
-  inscritos          InscricaoPorto[]
-  InstituicaoPorto   InstituicaoPorto[]
-  InvestimentoPorto  InvestimentoPorto[]
-  PedidoRecurso      PedidoRecurso[]
-  usuario            Usuario?            @relation(fields: [usuarioId], references: [id])
+  id                  String              @id @default(cuid())
+  usuarioId           String?             @unique
+  nome                String
+  tipo                TipoPorto?
+  cep                 String?
+  distrito            String?
+  populacaoEstimada   Int?
+  taxaDesempregoPct   Float?
+  rendaMediaCentavos  Int?
+  latitude            Float?
+  longitude           Float?
+  criadoEm            DateTime            @default(now())
+  bairro              String?
+  cidade              String?
+  codigo              String?             @unique
+  complemento         String?
+  logradouro          String?
+  numero              String?
+  uf                  String?
+  atualizadoEm        DateTime            @default(now())
+  emailContato        String?
+  identificador       String?
+  nomeFantasia        String?
+  status              StatusPorto         @default(EM_ANALISE)
+  telefoneContato     String?
+  tipoIdentificador   TipoIdentificador   @default(SEM_REGISTRO)
+  assinaturaAteEm     DateTime?
+  creditosContratacao Int                 @default(0)
+  CotaVaga            CotaVaga[]
+  empresas            EmpresaPorto[]
+  FormaRecebimento    FormaRecebimento[]
+  IniciativaPorto     IniciativaPorto[]
+  inscritos           InscricaoPorto[]
+  InstituicaoPorto    InstituicaoPorto[]
+  InvestimentoPorto   InvestimentoPorto[]
+  PedidoRecurso       PedidoRecurso[]
+  usuario             Usuario?            @relation(fields: [usuarioId], references: [id])
+  vagas               Vaga[]
+  cursos              Curso[]
+  apoiosIniciativa    ApoioIniciativa[]
+  Contratacao         Contratacao[]
+  apadrinhadosComo    Apadrinhamento[]    @relation("Padrinho")
+  apadrinhadoComo     Apadrinhamento[]    @relation("Afilhado")
+  pagamentosPorto     PagamentoPorto[]    @relation("PagadorPorto")
+  pagamentosRecebidos PagamentoPorto[]    @relation("AfilhadoPagamento")
 
   @@index([cidade, uf])
   @@index([cep])
@@ -178,7 +190,8 @@ model EmpresaPorto {
 
 model Vaga {
   id                 String          @id @default(cuid())
-  destinoId          String
+  destinoId          String?
+  portoId            String?
   titulo             String
   descricao          String
   requisitos         Json?
@@ -193,9 +206,13 @@ model Vaga {
   cep                String?
   quantidade         Int             @default(1)
   CotaVaga           CotaVaga[]
-  destino            Destino         @relation(fields: [destinoId], references: [id], onDelete: Cascade)
+  destino            Destino?        @relation(fields: [destinoId], references: [id], onDelete: Cascade)
+  porto              Porto?          @relation(fields: [portoId], references: [id], onDelete: Cascade)
   cursos             VagaCurso[]
   navegantes         VagaNavegante[]
+  contratacoes       Contratacao[]
+
+  @@index([portoId])
 }
 
 model Curso {
@@ -213,14 +230,17 @@ model Curso {
   longitude         Float?
   valoresEthos      String[]         @default([])
   destinoId         String?
+  portoId           String?
   instituicaoEnsino String?
   destino           Destino?         @relation(fields: [destinoId], references: [id], onDelete: Cascade)
+  porto             Porto?           @relation(fields: [portoId], references: [id], onDelete: Cascade)
   Instituicao       Instituicao?     @relation(fields: [instituicaoId], references: [id], onDelete: Cascade)
   navegantes        CursoNavegante[]
   TrilhaCurso       TrilhaCurso[]
   vagas             VagaCurso[]
 
   @@index([destinoId])
+  @@index([portoId])
 }
 
 model VagaCurso {
@@ -401,6 +421,7 @@ model IniciativaPorto {
   atualizadaEm        DateTime
   Porto               Porto                 @relation(fields: [portoId], references: [id], onDelete: Cascade)
   InscricaoIniciativa InscricaoIniciativa[]
+  ApoioIniciativa     ApoioIniciativa[]
 
   @@index([categoria, status])
   @@index([portoId])
@@ -418,6 +439,68 @@ model InscricaoIniciativa {
 
   @@unique([iniciativaId, naveganteId])
   @@index([naveganteId])
+}
+
+/// Lista de potenciais apoiadores de uma iniciativa: um navegante ou um porto.
+model ApoioIniciativa {
+  id              String          @id @default(cuid())
+  iniciativaId    String
+  naveganteId     String?
+  portoId         String?
+  criadoEm        DateTime        @default(now())
+  IniciativaPorto IniciativaPorto @relation(fields: [iniciativaId], references: [id], onDelete: Cascade)
+  Navegante       Navegante?      @relation(fields: [naveganteId], references: [id], onDelete: Cascade)
+  Porto           Porto?          @relation(fields: [portoId], references: [id], onDelete: Cascade)
+
+  @@unique([iniciativaId, naveganteId])
+  @@unique([iniciativaId, portoId])
+  @@index([naveganteId])
+  @@index([portoId])
+}
+
+/// Contratação de um navegante, feita pelo porto via plataforma. Consome um crédito de contratação.
+model Contratacao {
+  id            String    @id @default(cuid())
+  portoId       String
+  naveganteId   String
+  vagaId        String
+  valorCentavos Int
+  criadaEm      DateTime  @default(now())
+  Porto         Porto     @relation(fields: [portoId], references: [id], onDelete: Cascade)
+  Navegante     Navegante @relation(fields: [naveganteId], references: [id], onDelete: Cascade)
+  Vaga          Vaga      @relation(fields: [vagaId], references: [id], onDelete: Cascade)
+
+  @@unique([vagaId, naveganteId])
+  @@index([portoId])
+}
+
+/// Porto que apadrinha outro porto. `cotas` são as cotas de apoio já pagas.
+model Apadrinhamento {
+  padrinhoId String
+  afilhadoId String
+  cotas      Int      @default(0)
+  criadoEm   DateTime @default(now())
+  padrinho   Porto    @relation("Padrinho", fields: [padrinhoId], references: [id], onDelete: Cascade)
+  afilhado   Porto    @relation("Afilhado", fields: [afilhadoId], references: [id], onDelete: Cascade)
+
+  @@id([padrinhoId, afilhadoId])
+}
+
+/// Cobrança do porto: assinatura anual, crédito de contratação ou cotas de apoio a outro porto.
+model PagamentoPorto {
+  id            String             @id @default(cuid())
+  portoId       String
+  afilhadoId    String?
+  tipo          TipoPagamentoPorto
+  quantidade    Int                @default(1)
+  valorCentavos Int
+  status        PedidoStatus       @default(PENDENTE)
+  criadoEm      DateTime           @default(now())
+  pagoEm        DateTime?
+  porto         Porto              @relation("PagadorPorto", fields: [portoId], references: [id], onDelete: Cascade)
+  afilhado      Porto?             @relation("AfilhadoPagamento", fields: [afilhadoId], references: [id], onDelete: Cascade)
+
+  @@index([portoId, status])
 }
 
 model Instituicao {
@@ -681,6 +764,12 @@ enum EthosStatus {
   CONCLUIDO
 }
 
+enum TipoPagamentoPorto {
+  ASSINATURA_ANUAL
+  CREDITO_CONTRATACAO
+  COTA_APOIO
+}
+
 enum TipoPorto {
   IGREJA
   ESCOLA
@@ -822,5 +911,3 @@ enum Urgencia {
   ALTA
   CRITICA
 }
-
-
