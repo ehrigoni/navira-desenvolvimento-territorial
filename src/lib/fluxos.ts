@@ -1,8 +1,7 @@
 // Para onde cada perfil vai depois do login (docs/entrada/fluxos-agentes.md).
-import type { EthosStatus, Papel } from "@prisma/client";
+import type { Papel } from "@prisma/client";
 
-export function destinoPosLogin(usuario: { papel: Papel; ethosStatus?: EthosStatus | null }) {
+export function destinoPosLogin(usuario: { papel: Papel; questionarioConcluido?: boolean }) {
   if (usuario.papel === "PORTO") return "/porto";
-  // Navegante sem Ethos concluído volta ao questionário no ponto em que parou.
-  return usuario.ethosStatus === "CONCLUIDO" ? "/navegante" : "/navegante/ethos";
+  return usuario.questionarioConcluido ? "/navegante" : "/navegante/ethos";
 }

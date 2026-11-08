@@ -1,6 +1,3 @@
-// Schema do NAVIRA (MVP). Base: docs/porto/indicadores.prisma, docs/navegante/relacoes-meus-portos.md,
-// docs/entrada/ESPECIFICACAO_RECUPERACAO_SENHA.md e docs/entrada/fix-login-servidor.md.
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,9 +6,673 @@ datasource db {
   provider = "postgresql"
 }
 
+model Usuario {
+  id                         String          @id @default(cuid())
+  nome                       String
+  telefone                   String          @unique
+  email                      String?         @unique
+  senhaHash                  String
+  papel                      Papel
+  ultimoLoginEm              DateTime?
+  criadoEm                   DateTime        @default(now())
+  atualizadoEm               DateTime        @updatedAt
+  expiracaoTokenRecuperacao  DateTime?
+  metodoRecuperacao          String?
+  tentativasRecuperacao      Int             @default(0)
+  tokenRecuperacao           String?         @db.VarChar(255)
+  ultimaTentativaRecuperacao DateTime?
+  ativo                      Boolean         @default(true)
+  Apoiador                   Apoiador?
+  consentimentos             Consentimento[]
+  Destino                    Destino?
+  Instituicao                Instituicao?
+  navegante                  Navegante?
+  porto                      Porto?
+}
+
+/// Pessoa que busca inserção (Navegante). Ligada a um usuário.
+model Navegante {
+  id                  String                @id @default(cuid())
+  usuarioId           String                @unique
+  nomeSocial          String?
+  ethosStatus         EthosStatus           @default(NAO_INICIADO)
+  ethosBlocoAtual     Int                   @default(0)
+  ethosConcluidoEm    DateTime?
+  estagioImpacto      EstagioImpacto        @default(ALCANCADO)
+  indiceTravessia     Float?
+  criadoEm            DateTime              @default(now())
+  CotaVaga            CotaVaga[]
+  cursos              CursoNavegante[]
+  CursoRealizado      CursoRealizado[]
+  dadosSensiveis      DadosSensiveis?
+  FaixaCepNavegante   FaixaCepNavegante[]
+  InscricaoIniciativa InscricaoIniciativa[]
+  portos              InscricaoPorto[]
+  MatchingNavegante   MatchingNavegante?
+  usuario             Usuario               @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  RespostaEthos       RespostaEthos[]
+  SnapshotNavegante   SnapshotNavegante[]
+  vagas               VagaNavegante[]
+}
+
+model DadosSensiveis {
+  naveganteId     String    @id
+  racaCorCifrado  String?
+  religiaoCifrado String?
+  generoCifrado   String?
+  pcd             Boolean?
+  periferia       Boolean?
+  navegante       Navegante @relation(fields: [naveganteId], references: [id], onDelete: Cascade)
+}
+
+model Consentimento {
+  id           String            @id @default(cuid())
+  usuarioId    String
+  tipo         ConsentimentoTipo
+  concedido    Boolean
+  versaoTermo  String
+  registradoEm DateTime          @default(now())
+  usuario      Usuario           @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, tipo, registradoEm])
+}
+
+/// Território/organização (igreja, escola, associação, iniciativa). Tem CEP.
+model Porto {
+  id                 String              @id @default(cuid())
+  usuarioId          String?             @unique
+  nome               String
+  tipo               TipoPorto?
+  cep                String?
+  distrito           String?
+  populacaoEstimada  Int?
+  taxaDesempregoPct  Float?
+  rendaMediaCentavos Int?
+  latitude           Float?
+  longitude          Float?
+  criadoEm           DateTime            @default(now())
+  bairro             String?
+  cidade             String?
+  codigo             String?             @unique
+  complemento        String?
+  logradouro         String?
+  numero             String?
+  uf                 String?
+  atualizadoEm       DateTime            @default(now())
+  emailContato       String?
+  identificador      String?
+  nomeFantasia       String?
+  status             StatusPorto         @default(EM_ANALISE)
+  telefoneContato    String?
+  tipoIdentificador  TipoIdentificador   @default(SEM_REGISTRO)
+  CotaVaga           CotaVaga[]
+  empresas           EmpresaPorto[]
+  FormaRecebimento   FormaRecebimento[]
+  IniciativaPorto    IniciativaPorto[]
+  inscritos          InscricaoPorto[]
+  InstituicaoPorto   InstituicaoPorto[]
+  InvestimentoPorto  InvestimentoPorto[]
+  PedidoRecurso      PedidoRecurso[]
+  usuario            Usuario?            @relation(fields: [usuarioId], references: [id])
+
+  @@index([cidade, uf])
+  @@index([cep])
+  @@index([cidade])
+  @@index([identificador])
+}
+
+model InscricaoPorto {
+  naveganteId String
+  portoId     String
+  criadaEm    DateTime    @default(now())
+  papel       PapelMembro @default(NAVEGANTE)
+  navegante   Navegante   @relation(fields: [naveganteId], references: [id], onDelete: Cascade)
+  porto       Porto       @relation(fields: [portoId], references: [id], onDelete: Cascade)
+
+  @@id([naveganteId, portoId])
+  @@index([portoId])
+}
+
+/// Empresa que oferece vagas (Destino). Tem CEP e CNAE.
+model Destino {
+  id                   String                 @id @default(cuid())
+  usuarioId            String                 @unique
+  razaoSocial          String
+  cnpj                 String?                @unique
+  cnae                 String?
+  cep                  String?
+  latitude             Float?
+  longitude            Float?
+  publicidadePermitida Boolean                @default(false)
+  bairro               String?
+  cidade               String?
+  complemento          String?
+  logradouro           String?
+  numero               String?
+  uf                   String?
+  cnaesSecundarios     String[]               @default([])
+  CotaVaga             CotaVaga[]
+  cursos               Curso[]
+  Usuario              Usuario                @relation(fields: [usuarioId], references: [id])
+  portos               EmpresaPorto[]
+  MatchingEmpresa      MatchingEmpresa?
+  ModeloVaga           ModeloVaga[]
+  NotificacaoEmpresa   NotificacaoEmpresa[]
+  PacoteAcompanhamento PacoteAcompanhamento[]
+  Pedido               Pedido[]
+  vagas                Vaga[]
+
+  @@index([cep])
+}
+
+/// Empresa desenvolve portos (N—N).
+model EmpresaPorto {
+  destinoId String
+  portoId   String
+  criadoEm  DateTime @default(now())
+  destino   Destino  @relation(fields: [destinoId], references: [id], onDelete: Cascade)
+  porto     Porto    @relation(fields: [portoId], references: [id], onDelete: Cascade)
+
+  @@id([destinoId, portoId])
+}
+
+model Vaga {
+  id                 String          @id @default(cuid())
+  destinoId          String
+  titulo             String
+  descricao          String
+  requisitos         Json?
+  salarioMinCentavos Int?
+  salarioMaxCentavos Int?
+  beneficios         String[]
+  latitude           Float?
+  longitude          Float?
+  ativa              Boolean         @default(true)
+  criadaEm           DateTime        @default(now())
+  valoresEthos       String[]        @default([])
+  cep                String?
+  quantidade         Int             @default(1)
+  CotaVaga           CotaVaga[]
+  destino            Destino         @relation(fields: [destinoId], references: [id], onDelete: Cascade)
+  cursos             VagaCurso[]
+  navegantes         VagaNavegante[]
+}
+
+model Curso {
+  id                String           @id @default(cuid())
+  instituicaoId     String?
+  nome              String
+  descricao         String?
+  cargaHorariaHoras Int
+  inicio            DateTime?
+  termino           DateTime?
+  vagasDisponiveis  Int?
+  modalidade        Modalidade
+  cep               String?
+  latitude          Float?
+  longitude         Float?
+  valoresEthos      String[]         @default([])
+  destinoId         String?
+  instituicaoEnsino String?
+  destino           Destino?         @relation(fields: [destinoId], references: [id], onDelete: Cascade)
+  Instituicao       Instituicao?     @relation(fields: [instituicaoId], references: [id], onDelete: Cascade)
+  navegantes        CursoNavegante[]
+  TrilhaCurso       TrilhaCurso[]
+  vagas             VagaCurso[]
+
+  @@index([destinoId])
+}
+
+model VagaCurso {
+  vagaId  String
+  cursoId String
+  curso   Curso  @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+  vaga    Vaga   @relation(fields: [vagaId], references: [id], onDelete: Cascade)
+
+  @@id([vagaId, cursoId])
+}
+
+model VagaNavegante {
+  naveganteId String
+  vagaId      String
+  criadaEm    DateTime  @default(now())
+  navegante   Navegante @relation(fields: [naveganteId], references: [id], onDelete: Cascade)
+  vaga        Vaga      @relation(fields: [vagaId], references: [id], onDelete: Cascade)
+
+  @@id([naveganteId, vagaId])
+}
+
+model CursoNavegante {
+  naveganteId String
+  cursoId     String
+  criadoEm    DateTime  @default(now())
+  curso       Curso     @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+  navegante   Navegante @relation(fields: [naveganteId], references: [id], onDelete: Cascade)
+
+  @@id([naveganteId, cursoId])
+}
+
+model Administrador {
+  id                  String          @id
+  login               String          @unique
+  nome                String
+  senhaHash           String
+  ativo               Boolean         @default(true)
+  trocarSenha         Boolean         @default(true)
+  tentativasFalhas    Int             @default(0)
+  bloqueadoAte        DateTime?
+  ultimoLoginEm       DateTime?
+  criadoEm            DateTime        @default(now())
+  criadoPorId         String?
+  Administrador       Administrador?  @relation("AdministradorToAdministrador", fields: [criadoPorId], references: [id])
+  other_Administrador Administrador[] @relation("AdministradorToAdministrador")
+}
+
+model Apoiador {
+  id          String  @id
+  usuarioId   String  @unique
+  razaoSocial String
+  cnpj        String? @unique
+  Usuario     Usuario @relation(fields: [usuarioId], references: [id])
+}
+
+model Cnae {
+  codigo      String        @id
+  descricao   String
+  EmpresaCnpj EmpresaCnpj[]
+}
+
+model CotaVaga {
+  id          String     @id
+  pedidoId    String
+  destinoId   String
+  vagaId      String?
+  naveganteId String?
+  portoId     String?
+  status      StatusCota @default(DISPONIVEL)
+  lotadaEm    DateTime?
+  Destino     Destino    @relation(fields: [destinoId], references: [id])
+  Navegante   Navegante? @relation(fields: [naveganteId], references: [id])
+  Pedido      Pedido     @relation(fields: [pedidoId], references: [id])
+  Porto       Porto?     @relation(fields: [portoId], references: [id])
+  Vaga        Vaga?      @relation(fields: [vagaId], references: [id])
+  NpsSocial   NpsSocial?
+
+  @@index([destinoId, status])
+  @@index([portoId])
+}
+
+model CursoRealizado {
+  id             String      @id
+  naveganteId    String
+  curso          String
+  descricao      String
+  cargaHoraria   Int
+  instituicao    String
+  dataRealizacao DateTime    @db.Date
+  criadoEm       DateTime    @default(now())
+  modalidade     Modalidade?
+  Navegante      Navegante   @relation(fields: [naveganteId], references: [id], onDelete: Cascade)
+
+  @@index([naveganteId])
+}
+
+model EmpresaCnpj {
+  cnpj         String    @id
+  matriz       Boolean
+  razaoSocial  String?
+  nomeFantasia String?
+  cnaeCodigo   String
+  logradouro   String?
+  numero       String?
+  complemento  String?
+  bairro       String?
+  cidade       String
+  cep          String
+  latitude     Float?
+  longitude    Float?
+  porte        String?
+  dataInicio   DateTime?
+  Cnae         Cnae      @relation(fields: [cnaeCodigo], references: [codigo])
+
+  @@index([cep])
+  @@index([cnaeCodigo])
+}
+
+model Escola {
+  id           String   @id
+  fonte        String
+  inep         String?
+  nome         String
+  rede         String?
+  etapas       String?
+  logradouro   String?
+  numero       String?
+  bairro       String?
+  cidade       String
+  cep          String?
+  latitude     Float
+  longitude    Float
+  atualizadoEm DateTime
+
+  @@index([cidade])
+}
+
+model FaixaCepNavegante {
+  naveganteId String
+  ibge        Int
+  cidade      String
+  cepInicial  String
+  cepFinal    String
+  criadaEm    DateTime  @default(now())
+  Navegante   Navegante @relation(fields: [naveganteId], references: [id], onDelete: Cascade)
+
+  @@id([naveganteId, ibge])
+  @@index([cepInicial, cepFinal])
+}
+
+model FormaRecebimento {
+  id                 String               @id
+  portoId            String
+  tipo               TipoFormaRecebimento
+  titulo             String
+  instrucoes         Json
+  padrao             Boolean              @default(false)
+  criadoEm           DateTime             @default(now())
+  atualizadoEm       DateTime
+  Porto              Porto                @relation(fields: [portoId], references: [id], onDelete: Cascade)
+  PedidoRecursoForma PedidoRecursoForma[]
+
+  @@index([portoId])
+}
+
+model IniciativaPorto {
+  id                  String                @id
+  portoId             String
+  categoria           CategoriaIniciativa
+  titulo              String
+  descricao           String
+  modalidade          Modalidade            @default(PRESENCIAL)
+  vagasTotais         Int?
+  inicio              DateTime?
+  termino             DateTime?
+  status              StatusIniciativa      @default(ABERTO)
+  criadaEm            DateTime              @default(now())
+  atualizadaEm        DateTime
+  Porto               Porto                 @relation(fields: [portoId], references: [id], onDelete: Cascade)
+  InscricaoIniciativa InscricaoIniciativa[]
+
+  @@index([categoria, status])
+  @@index([portoId])
+}
+
+model InscricaoIniciativa {
+  id              String                    @id
+  iniciativaId    String
+  naveganteId     String
+  status          StatusInscricaoIniciativa @default(INSCRITO)
+  inscritoEm      DateTime                  @default(now())
+  atualizadoEm    DateTime
+  IniciativaPorto IniciativaPorto           @relation(fields: [iniciativaId], references: [id], onDelete: Cascade)
+  Navegante       Navegante                 @relation(fields: [naveganteId], references: [id], onDelete: Cascade)
+
+  @@unique([iniciativaId, naveganteId])
+  @@index([naveganteId])
+}
+
+model Instituicao {
+  id                   String                 @id
+  usuarioId            String                 @unique
+  razaoSocial          String
+  cnpj                 String?                @unique
+  Curso                Curso[]
+  Usuario              Usuario                @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  InstituicaoPorto     InstituicaoPorto[]
+  PacoteAcompanhamento PacoteAcompanhamento[]
+  Trilha               Trilha[]
+}
+
+model InstituicaoPorto {
+  instituicaoId String
+  portoId       String
+  criadoEm      DateTime    @default(now())
+  Instituicao   Instituicao @relation(fields: [instituicaoId], references: [id], onDelete: Cascade)
+  Porto         Porto       @relation(fields: [portoId], references: [id], onDelete: Cascade)
+
+  @@id([instituicaoId, portoId])
+}
+
+model InvestimentoPorto {
+  id            String   @id
+  pedidoId      String
+  portoId       String
+  valorCentavos Int
+  criadoEm      DateTime @default(now())
+  Pedido        Pedido   @relation(fields: [pedidoId], references: [id])
+  Porto         Porto    @relation(fields: [portoId], references: [id])
+
+  @@index([portoId])
+}
+
+model Lead {
+  id              String         @id
+  nome            String
+  email           String?        @unique
+  telefone        String         @unique
+  tipoAgente      Papel
+  status          StatusLead     @default(NOVO)
+  localizacao     String?
+  descricaoOrgao  String?
+  motivacao       String?
+  contatoNome     String?
+  contatoTelefone String?
+  contatoEmail    String?
+  criadoEm        DateTime       @default(now())
+  atualizadoEm    DateTime
+  proximoContato  DateTime?
+  observacoes     String?
+  RespostaLead    RespostaLead[]
+
+  @@index([email])
+  @@index([status, tipoAgente])
+  @@index([telefone])
+}
+
+model MatchingEmpresa {
+  destinoId    String   @id
+  perfil       Json
+  assinatura   String
+  atualizadoEm DateTime
+  Destino      Destino  @relation(fields: [destinoId], references: [id], onDelete: Cascade)
+}
+
+model MatchingNavegante {
+  naveganteId  String    @id
+  perfil       Json
+  assinatura   String
+  atualizadoEm DateTime
+  Navegante    Navegante @relation(fields: [naveganteId], references: [id], onDelete: Cascade)
+}
+
+model ModeloVaga {
+  id        String   @id
+  destinoId String
+  nome      String
+  dados     Json
+  criadoEm  DateTime @default(now())
+  Destino   Destino  @relation(fields: [destinoId], references: [id], onDelete: Cascade)
+
+  @@index([destinoId])
+}
+
+model MunicipioPrioritario {
+  id                           String   @id
+  codigoIbge                   String?  @unique
+  nome                         String
+  uf                           String   @db.Char(2)
+  populacaoEconomicamenteAtiva Int?
+  criadoEm                     DateTime @default(now())
+  atualizadoEm                 DateTime
+
+  @@unique([nome, uf])
+}
+
+model NotificacaoEmpresa {
+  id           String          @id
+  destinoId    String
+  tipo         TipoNotificacao
+  mensagem     String
+  quantidade   Int             @default(0)
+  lida         Boolean         @default(false)
+  criadaEm     DateTime        @default(now())
+  atualizadaEm DateTime
+  Destino      Destino         @relation(fields: [destinoId], references: [id], onDelete: Cascade)
+
+  @@index([destinoId, lida])
+}
+
+model NpsSocial {
+  id           String   @id
+  cotaVagaId   String   @unique
+  nota         Int
+  respondidaEm DateTime @default(now())
+  CotaVaga     CotaVaga @relation(fields: [cotaVagaId], references: [id], onDelete: Cascade)
+}
+
+model PacoteAcompanhamento {
+  id                    String       @id
+  destinoId             String?
+  instituicaoId         String?
+  quantidadePessoas     Int
+  valorUnitarioCentavos Int
+  totalCentavos         Int
+  status                PedidoStatus @default(PENDENTE)
+  criadoEm              DateTime     @default(now())
+  pagoEm                DateTime?
+  Destino               Destino?     @relation(fields: [destinoId], references: [id], onDelete: Cascade)
+  Instituicao           Instituicao? @relation(fields: [instituicaoId], references: [id], onDelete: Cascade)
+
+  @@index([destinoId])
+  @@index([instituicaoId])
+}
+
+model Pedido {
+  id                          String              @id
+  destinoId                   String
+  quantidadeVagas             Int
+  valorCotaCentavos           Int
+  acompanhamentoTerritorio    Boolean             @default(false)
+  valorAcompanhamentoCentavos Int                 @default(0)
+  totalCentavos               Int
+  status                      PedidoStatus        @default(PENDENTE)
+  metodo                      MetodoPagamento?
+  gatewayRef                  String?
+  criadoEm                    DateTime            @default(now())
+  pagoEm                      DateTime?
+  CotaVaga                    CotaVaga[]
+  InvestimentoPorto           InvestimentoPorto[]
+  Destino                     Destino             @relation(fields: [destinoId], references: [id])
+}
+
+model PedidoRecurso {
+  id                   String               @id
+  portoId              String
+  categoria            CategoriaRecurso
+  titulo               String
+  descricao            String
+  urgencia             Urgencia             @default(MEDIA)
+  quantidadeMeta       Decimal?             @db.Decimal(12, 2)
+  quantidadeArrecadada Decimal?             @default(0) @db.Decimal(12, 2)
+  unidade              String?
+  status               StatusPedidoRecurso  @default(ABERTA)
+  criadoEm             DateTime             @default(now())
+  atualizadoEm         DateTime
+  Porto                Porto                @relation(fields: [portoId], references: [id], onDelete: Cascade)
+  PedidoRecursoForma   PedidoRecursoForma[]
+
+  @@index([categoria, status])
+  @@index([portoId])
+}
+
+model PedidoRecursoForma {
+  pedidoRecursoId    String
+  formaRecebimentoId String
+  FormaRecebimento   FormaRecebimento @relation(fields: [formaRecebimentoId], references: [id], onDelete: Cascade)
+  PedidoRecurso      PedidoRecurso    @relation(fields: [pedidoRecursoId], references: [id], onDelete: Cascade)
+
+  @@id([pedidoRecursoId, formaRecebimentoId])
+  @@index([formaRecebimentoId])
+}
+
+model RespostaEthos {
+  id                 String    @id
+  naveganteId        String
+  bloco              Int
+  questaoId          String
+  valor              Json
+  versaoQuestionario String
+  atualizadoEm       DateTime
+  Navegante          Navegante @relation(fields: [naveganteId], references: [id], onDelete: Cascade)
+
+  @@unique([naveganteId, questaoId])
+}
+
+model RespostaLead {
+  id           String   @id
+  leadId       String
+  blocoId      String
+  questaoId    String
+  valor        String
+  respondidoEm DateTime @default(now())
+  Lead         Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, questaoId])
+  @@index([leadId, blocoId])
+}
+
+model SnapshotNavegante {
+  id                   String    @id
+  naveganteId          String
+  registradoEm         DateTime  @default(now())
+  origem               String
+  rendaIndividualFaixa String?
+  rendaFamiliarFaixa   String?
+  situacaoProfissional String?
+  escolaridade         String?
+  cargo                String?
+  satisfacao           Int?
+  perspectivaFuturo    Int?
+  Navegante            Navegante @relation(fields: [naveganteId], references: [id], onDelete: Cascade)
+
+  @@index([naveganteId, registradoEm])
+}
+
+model Trilha {
+  id            String        @id
+  instituicaoId String
+  nome          String
+  descricao     String?
+  Instituicao   Instituicao   @relation(fields: [instituicaoId], references: [id], onDelete: Cascade)
+  TrilhaCurso   TrilhaCurso[]
+}
+
+model TrilhaCurso {
+  trilhaId String
+  cursoId  String
+  ordem    Int
+  Curso    Curso  @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+  Trilha   Trilha @relation(fields: [trilhaId], references: [id], onDelete: Cascade)
+
+  @@id([trilhaId, cursoId])
+}
+
 enum Papel {
   NAVEGANTE
   PORTO
+  TRILHA
+  DESTINO
+  APOIADOR
+  ADMIN
 }
 
 enum EthosStatus {
@@ -26,14 +687,10 @@ enum TipoPorto {
   ASSOCIACAO
   INICIATIVA
   OUTRO
-}
-
-enum StatusCandidatura {
-  ESCOLHIDA
-  CANDIDATADA
-  ENTREVISTADA
-  CONTRATADA
-  RECUSADA
+  ESCOLA_PUBLICA
+  ESCOLA_PRIVADA
+  ONG
+  COLETIVO
 }
 
 enum Modalidade {
@@ -42,174 +699,128 @@ enum Modalidade {
   HIBRIDA
 }
 
-model Usuario {
-  id                        String     @id @default(cuid())
-  nome                      String
-  email                     String?    @unique
-  telefone                  String?    @unique
-  senhaHash                 String
-  papel                     Papel
-  ethosStatus               EthosStatus @default(NAO_INICIADO)
-
-  // Recuperação de senha. O token é guardado como hash SHA-256; o original só vai ao usuário.
-  tokenRecuperacao          String?    @unique
-  expiracaoTokenRecuperacao DateTime?
-  recuperacaoJanelaInicio   DateTime?
-  recuperacoesNaJanela      Int        @default(0)
-
-  ultimoLoginEm             DateTime?
-  criadoEm                  DateTime   @default(now())
-  atualizadoEm              DateTime   @updatedAt
-
-  navegante                 Navegante?
-  porto                     Porto?
+enum CategoriaIniciativa {
+  CURSO
+  VAGA_EMPREGO
+  VOLUNTARIADO
+  MUTIRAO
+  EVENTO
 }
 
-/// Pessoa que busca inserção (Navegante). Ligada a um usuário.
-model Navegante {
-  id          String   @id @default(cuid())
-  usuarioId   String   @unique
-  usuario     Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  cep         String?
-  portos      InscricaoPorto[]
-  vagas       VagaNavegante[]
-  cursos      CursoNavegante[]
-  contratacoes Contratacao[]
+enum CategoriaRecurso {
+  FINANCEIRO
+  ALIMENTOS
+  EQUIPAMENTO
+  MATERIAL_CONSTRUCAO
+  SERVICO_VOLUNTARIO
+  OUTRO
 }
 
-/// Território/organização (igreja, escola, associação, iniciativa). Tem CEP.
-model Porto {
-  id          String     @id @default(cuid())
-  usuarioId   String?    @unique
-  usuario     Usuario?   @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
-  nome        String
-  tipo        TipoPorto  @default(OUTRO)
-  cep         String
-  logradouro  String?
-  numero      String?
-  bairro      String?
-  cidade      String
-  uf          String     @db.Char(2)
-  criadoEm    DateTime   @default(now())
-  inscritos   InscricaoPorto[]
-  empresas    EmpresaPorto[]
-
-  @@index([cidade, uf])
+enum ConsentimentoTipo {
+  PARTICIPACAO
+  RECOMENDACOES
+  DADOS_AGREGADOS
+  CONTATO
+  DADOS_SENSIVEIS
 }
 
-model InscricaoPorto {
-  naveganteId String
-  navegante   Navegante @relation(fields: [naveganteId], references: [id], onDelete: Cascade)
-  portoId     String
-  porto       Porto     @relation(fields: [portoId], references: [id], onDelete: Cascade)
-  criadoEm    DateTime  @default(now())
-
-  @@id([naveganteId, portoId])
+enum EstagioImpacto {
+  ALCANCADO
+  ENGAJADO
+  IMPACTADO
 }
 
-/// Empresa que oferece vagas (Destino). Tem CEP e CNAE.
-model Destino {
-  id          String   @id @default(cuid())
-  razaoSocial String
-  cnpj        String?  @unique
-  cnae        String?
-  cep         String
-  cidade      String
-  uf          String   @db.Char(2)
-  criadoEm    DateTime @default(now())
-  vagas       Vaga[]
-  contratacoes Contratacao[]
-  portos      EmpresaPorto[]
-  cursos      Curso[]
-
-  @@index([cidade, uf])
+enum MetodoPagamento {
+  PIX
+  CREDITO
+  DEBITO
+  PAYPAL
 }
 
-/// Empresa desenvolve portos (N—N).
-model EmpresaPorto {
-  destinoId String
-  destino   Destino @relation(fields: [destinoId], references: [id], onDelete: Cascade)
-  portoId   String
-  porto     Porto   @relation(fields: [portoId], references: [id], onDelete: Cascade)
-
-  @@id([destinoId, portoId])
+enum PapelMembro {
+  NAVEGANTE
+  ALUNO
+  BENEFICIARIO
+  VOLUNTARIO
+  GESTOR_PORTO
 }
 
-model Vaga {
-  id          String   @id @default(cuid())
-  destinoId   String
-  destino     Destino  @relation(fields: [destinoId], references: [id], onDelete: Cascade)
-  titulo      String
-  descricao   String?
-  salario     Decimal? @db.Decimal(12, 2)
-  cidade      String?
-  uf          String?  @db.Char(2)
-  ativa       Boolean  @default(true)
-  publicadaEm DateTime @default(now())
-  navegantes  VagaNavegante[]
-  requisitos  VagaCurso[]
-  contratacoes Contratacao[]
-
-  @@index([ativa])
+enum PedidoStatus {
+  PENDENTE
+  PAGO
+  CANCELADO
+  EXPIRADO
 }
 
-model Curso {
-  id           String    @id @default(cuid())
-  titulo       String
-  descricao    String?
-  cargaHoraria Int?
-  modalidade   Modalidade @default(PRESENCIAL)
-  instituicao  String?
-  destinoId    String?
-  destino      Destino?  @relation(fields: [destinoId], references: [id], onDelete: SetNull)
-  vagas        VagaCurso[]
-  navegantes   CursoNavegante[]
+enum StatusCota {
+  DISPONIVEL
+  LOTADA
 }
 
-model VagaCurso {
-  vagaId  String
-  vaga    Vaga  @relation(fields: [vagaId], references: [id], onDelete: Cascade)
-  cursoId String
-  curso   Curso @relation(fields: [cursoId], references: [id], onDelete: Cascade)
-
-  @@id([vagaId, cursoId])
+enum StatusIniciativa {
+  RASCUNHO
+  ABERTO
+  EM_ANDAMENTO
+  ENCERRADO
+  CANCELADO
 }
 
-model VagaNavegante {
-  naveganteId String
-  navegante   Navegante        @relation(fields: [naveganteId], references: [id], onDelete: Cascade)
-  vagaId      String
-  vaga        Vaga             @relation(fields: [vagaId], references: [id], onDelete: Cascade)
-  status      StatusCandidatura @default(ESCOLHIDA)
-  statusEm    DateTime?
-
-  @@id([naveganteId, vagaId])
+enum StatusInscricaoIniciativa {
+  INSCRITO
+  EM_LISTA_ESPERA
+  APROVADO
+  CONCLUIDO
+  DESISTENTE
 }
 
-model CursoNavegante {
-  naveganteId String
-  navegante   Navegante @relation(fields: [naveganteId], references: [id], onDelete: Cascade)
-  cursoId     String
-  curso       Curso     @relation(fields: [cursoId], references: [id], onDelete: Cascade)
-  realizado   Boolean   @default(false)
-
-  @@id([naveganteId, cursoId])
+enum StatusLead {
+  NOVO
+  CONTATADO
+  QUALIFICADO
+  PROPOSTA_ENVIADA
+  NEGOCIACAO
+  GANHO
+  PERDIDO
+  DESCARTADO
 }
 
-/// Inserção de um Navegante no mercado de trabalho (base dos indicadores).
-model Contratacao {
-  id          String    @id @default(cuid())
-  naveganteId String
-  navegante   Navegante @relation(fields: [naveganteId], references: [id], onDelete: Cascade)
-  vagaId      String?
-  vaga        Vaga?     @relation(fields: [vagaId], references: [id], onDelete: SetNull)
-  destinoId   String
-  destino     Destino   @relation(fields: [destinoId], references: [id])
-  inicio      DateTime
-  fim         DateTime?
-  salario     Decimal?  @db.Decimal(12, 2)
-  criadoEm    DateTime  @default(now())
-
-  @@index([naveganteId])
-  @@index([destinoId])
+enum StatusPedidoRecurso {
+  ABERTA
+  PARCIALMENTE_ATENDIDA
+  CONCLUIDA
+  CANCELADA
 }
+
+enum StatusPorto {
+  ATIVO
+  EM_ANALISE
+  SUSPENSO
+  INATIVO
+}
+
+enum TipoFormaRecebimento {
+  PIX
+  TRANSFERENCIA_BANCARIA
+  PONTO_COLETA_PRESENCIAL
+  AGENDAMENTO_RETIRADA
+}
+
+enum TipoIdentificador {
+  CNPJ
+  INEP
+  REGISTRO_CARTORIAL
+  SEM_REGISTRO
+}
+
+enum TipoNotificacao {
+  INTERESSADOS_SEM_COTA
+}
+
+enum Urgencia {
+  BAIXA
+  MEDIA
+  ALTA
+  CRITICA
+}
+
+

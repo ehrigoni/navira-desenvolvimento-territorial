@@ -37,10 +37,12 @@ export async function recuperarSenha(_: EstadoRecuperacao, formData: FormData): 
     });
 
     // Rate limiting: no máximo 3 pedidos por hora por conta. Sem revelar a conta ao usuário.
+    // A contagem vale enquanto a última tentativa estiver dentro da janela; tentativas bloqueadas não renovam a janela.
     if (usuario) {
       const agora = new Date();
-      const janelaAtiva = usuario.recuperacaoJanelaInicio && agora.getTime() - usuario.recuperacaoJanelaInicio.getTime() < JANELA_RECUPERACAO_MS;
-      const contagem = janelaAtiva ? usuario.recuperacoesNaJanela : 0;
+      const janelaAtiva = usuario.ultimaTentativaRecuperacao
+        && agora.getTime() - usuario.ultimaTentativaRecuperacao.getTime() < JANELA_RECUPERACAO_MS;
+      const contagem = janelaAtiva ? usuario.tentativasRecuperacao : 0;
 
       if (contagem < MAX_RECUPERACOES_POR_JANELA) {
         const { token, hash } = gerarToken();
@@ -49,8 +51,9 @@ export async function recuperarSenha(_: EstadoRecuperacao, formData: FormData): 
           data: {
             tokenRecuperacao: hash,
             expiracaoTokenRecuperacao: new Date(agora.getTime() + VALIDADE_TOKEN_MS),
-            recuperacaoJanelaInicio: janelaAtiva ? usuario.recuperacaoJanelaInicio : agora,
-            recuperacoesNaJanela: contagem + 1,
+            metodoRecuperacao: metodo,
+            ultimaTentativaRecuperacao: agora,
+            tentativasRecuperacao: contagem + 1,
           },
         });
         // TODO: enviar por e-mail (Resend/SendGrid) ou WhatsApp (Twilio). Enquanto isso, o link vai para o log do servidor.

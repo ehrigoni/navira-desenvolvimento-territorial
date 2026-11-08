@@ -28,6 +28,7 @@ export async function entrar(_: EstadoLogin, formData: FormData): Promise<Estado
   try {
     usuario = await db.usuario.findUnique({
       where: v.chave.tipo === "email" ? { email: v.chave.valor } : { telefone: v.chave.valor },
+      include: { navegante: { select: { ethosConcluidoEm: true } } },
     });
     hashFalso ??= bcrypt.hashSync("navira-dummy", 12);
     confere = await bcrypt.compare(v.senha, usuario?.senhaHash ?? hashFalso);
@@ -36,8 +37,9 @@ export async function entrar(_: EstadoLogin, formData: FormData): Promise<Estado
     return { erro: MSG.loginIndisponivel, campos };
   }
 
-  // Mesma mensagem para usuário inexistente e senha errada. Nenhuma sessão é criada.
-  if (!usuario || !confere) return { erro: MSG.login, campos };
+  // Mesma mensagem para usuário inexistente, senha errada, conta inativa ou papel sem acesso a este app.
+  if (!usuario || !confere || !usuario.ativo) return { erro: MSG.login, campos };
+  if (usuario.papel !== "NAVEGANTE" && usuario.papel !== "PORTO") return { erro: MSG.login, campos };
 
   // 3) Sessão e último login. Falha ao registrar o login não impede a entrada.
   try {
@@ -49,5 +51,8 @@ export async function entrar(_: EstadoLogin, formData: FormData): Promise<Estado
   await criarSessao({ sub: usuario.id, nome: usuario.nome, papel: usuario.papel });
 
   // 4) Encaminha para o fluxo do perfil. O redirect fica fora de try/catch (ele lança uma exceção interna).
-  redirect(destinoPosLogin(usuario));
+  redirect(destinoPosLogin({
+    papel: usuario.papel,
+    questionarioConcluido: !!usuario.navegante?.ethosConcluidoEm,
+  }));
 }

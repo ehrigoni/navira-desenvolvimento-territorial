@@ -1,9 +1,9 @@
 // Dados de exemplo para desenvolvimento. Não rode em produção.
-// Logins criados: navegante (11) 91234-5678 e porto porto@exemplo.com.br, senha SENHA_DEMO.
+// Logins criados: navegante (11) 91234-5678 e porto (11) 98765-4321 / porto@exemplo.com.br, senha SENHA_DEMO.
 import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@prisma/client";
+import { EthosStatus, PrismaClient } from "@prisma/client";
 
 const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
 const SENHA_DEMO = "navira2026";
@@ -19,17 +19,17 @@ async function main() {
       telefone: "11912345678",
       senhaHash,
       papel: "NAVEGANTE",
-      ethosStatus: "CONCLUIDO",
-      navegante: { create: { cep: "90010000" } },
+      navegante: { create: { ethosStatus: EthosStatus.CONCLUIDO, ethosConcluidoEm: new Date() } },
     },
     include: { navegante: true },
   });
 
   const usuarioPorto = await db.usuario.upsert({
-    where: { email: "porto@exemplo.com.br" },
+    where: { telefone: "11987654321" },
     update: {},
     create: {
       nome: "Responsável Demonstração",
+      telefone: "11987654321",
       email: "porto@exemplo.com.br",
       senhaHash,
       papel: "PORTO",
@@ -51,10 +51,23 @@ async function main() {
     create: { naveganteId: usuarioNavegante.navegante!.id, portoId: portoIgreja.id },
   });
 
-  const empresa = await db.destino.upsert({
-    where: { cnpj: "12345678000190" },
+  // Empresa (Destino) exige um usuário próprio (papel DESTINO) no schema de produção.
+  const usuarioEmpresa = await db.usuario.upsert({
+    where: { telefone: "1133334444" },
     update: {},
     create: {
+      nome: "Empresa Demonstração Ltda.",
+      telefone: "1133334444",
+      senhaHash,
+      papel: "DESTINO",
+    },
+  });
+
+  const empresa = await db.destino.upsert({
+    where: { usuarioId: usuarioEmpresa.id },
+    update: {},
+    create: {
+      usuarioId: usuarioEmpresa.id,
       razaoSocial: "Empresa Demonstração Ltda.",
       cnpj: "12345678000190",
       cnae: "4711-3/02",
@@ -75,11 +88,11 @@ async function main() {
     update: {},
     create: {
       id: "curso-atendimento-demo",
-      titulo: "Atendimento ao cliente",
+      nome: "Atendimento ao cliente",
       descricao: "Noções de atendimento e comunicação.",
-      cargaHoraria: 40,
+      cargaHorariaHoras: 40,
       modalidade: "REMOTA",
-      instituicao: "Trilha Demonstração",
+      instituicaoEnsino: "Trilha Demonstração",
     },
   });
 
@@ -90,14 +103,19 @@ async function main() {
         destinoId: empresa.id,
         titulo: "Auxiliar de atendimento",
         descricao: "Atendimento presencial no comércio local.",
-        salario: "2100.00",
-        cidade: "Porto Alegre",
-        uf: "RS",
-        requisitos: { create: [{ cursoId: curso.id }] },
+        salarioMinCentavos: 210000,
+        cep: "90030000",
+        cursos: { create: [{ cursoId: curso.id }] },
       },
     });
     await db.vaga.create({
-      data: { destinoId: empresa.id, titulo: "Repositor de estoque", salario: "1900.00", cidade: "Porto Alegre", uf: "RS" },
+      data: {
+        destinoId: empresa.id,
+        titulo: "Repositor de estoque",
+        descricao: "Reposição de mercadorias em loja.",
+        salarioMinCentavos: 190000,
+        cep: "90030000",
+      },
     });
   }
 

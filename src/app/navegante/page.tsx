@@ -2,121 +2,230 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/auth";
-import { formatarSalario, indiceLocal } from "@/lib/matching";
+import { calcularIndiceLocal, formatarFaixaSalarial } from "@/lib/matching";
+import FormularioPorto from "./FormularioPorto";
+import FormularioCursoRealizado from "./FormularioCursoRealizado";
+import { alternarCurso, alternarVaga, removerCursoRealizado, removerPorto } from "./actions";
 
-export default async function PainelNavegante() {
+const MODALIDADE_ROTULO: Record<string, string> = { PRESENCIAL: "presencial", REMOTA: "online", HIBRIDA: "presencial e online" };
+
+export default async function PainelNavegante({ searchParams }: { searchParams: Promise<{ vagas?: string; cursos?: string }> }) {
   const sessao = await exigirSessao("NAVEGANTE");
+  const { vagas: verVagas, cursos: verCursos } = await searchParams;
 
   const navegante = await db.navegante.findUnique({
     where: { usuarioId: sessao.sub },
     include: {
-      usuario: { select: { ethosStatus: true } },
       portos: { include: { porto: true } },
+      CursoRealizado: { orderBy: { dataRealizacao: "desc" } },
+      vagas: { select: { vagaId: true } },
+      cursos: { select: { cursoId: true } },
     },
   });
   if (!navegante) redirect("/entrar");
+  if (!navegante.ethosConcluidoEm) redirect("/navegante/ethos");
 
   const portos = navegante.portos.map((i) => i.porto);
+  const escolhidasVagas = new Set(navegante.vagas.map((v) => v.vagaId));
+  const escolhidosCursos = new Set(navegante.cursos.map((c) => c.cursoId));
+
+  // Vagas: "Minhas vagas" mostra as que têm proximidade com algum porto; "todas" mostra todas as ativas.
   const vagasAtivas = await db.vaga.findMany({
     where: { ativa: true },
-    include: { destino: { select: { razaoSocial: true } }, requisitos: { include: { curso: true } } },
-    orderBy: { publicadaEm: "desc" },
-    take: 100,
+    include: {
+      destino: { select: { razaoSocial: true, cnae: true, cep: true, cidade: true, uf: true } },
+      cursos: { include: { curso: { select: { id: true, nome: true } } } },
+    },
+    orderBy: { criadaEm: "desc" },
+    take: 200,
   });
+  const vagasRankeadas = vagasAtivas
+    .map((vaga) => ({
+      vaga,
+      indice: calcularIndiceLocal({ cep: vaga.cep ?? vaga.destino.cep, cidade: vaga.destino.cidade, uf: vaga.destino.uf }, portos),
+    }))
+    .sort((a, b) => b.indice - a.indice);
+  const mostrarTodasVagas = verVagas === "todas";
+  const vagas = (mostrarTodasVagas ? vagasRankeadas : vagasRankeadas.filter((v) => v.indice > 0)).slice(0, mostrarTodasVagas ? 100 : 20);
+  const vagasEscolhidas = vagasAtivas.filter((v) => escolhidasVagas.has(v.id));
 
-  // Mais próximas dos portos primeiro; empate mantém a ordem de publicação.
-  const vagas = vagasAtivas
-    .map((vaga) => ({ vaga, indice: indiceLocal(vaga, portos) }))
-    .sort((a, b) => b.indice - a.indice)
-    .slice(0, 20);
-
-  // Cursos exigidos pelas vagas de maior índice (docs/navegante/relacoes-meus-portos.md).
-  const cursos = new Map<string, { id: string; titulo: string; modalidade: string }>();
-  for (const { vaga } of vagas.slice(0, 5)) {
-    for (const req of vaga.requisitos) cursos.set(req.curso.id, req.curso);
-  }
-
-  const semEthos = navegante.usuario.ethosStatus !== "CONCLUIDO";
+  // Cursos: "Meus cursos" mostra os próximos dos portos; "todos" mostra todos.
+  const cursosDisponiveis = await db.curso.findMany({
+    include: { destino: { select: { cep: true, cidade: true, uf: true } } },
+    orderBy: { nome: "asc" },
+    take: 200,
+  });
+  const cursosRankeados = cursosDisponiveis
+    .map((curso) => ({
+      curso,
+      indice: calcularIndiceLocal({ cep: curso.cep ?? curso.destino?.cep, cidade: curso.destino?.cidade, uf: curso.destino?.uf }, portos),
+    }))
+    .sort((a, b) => b.indice - a.indice);
+  const mostrarTodosCursos = verCursos === "todos";
+  const cursos = (mostrarTodosCursos ? cursosRankeados : cursosRankeados.filter((c) => c.indice > 0)).slice(0, mostrarTodosCursos ? 100 : 20);
+  const cursosEscolhidos = cursosDisponiveis.filter((c) => escolhidosCursos.has(c.id));
 
   return (
     <main className="conteudo">
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 12 }}>
+      <header className="painel-cabecalho">
         <div>
-          <h1>Olá, {sessao.nome.split(" ")[0]}</h1>
-          <p className="subtitulo">Seu painel de portos, vagas e cursos.</p>
+          <h1>Meus Portos</h1>
+          <p className="subtitulo">Olá, {sessao.nome.split(" ")[0]}. Seu painel de portos, vagas e cursos.</p>
         </div>
         <form action="/sair" method="post">
-          <button className="botao secundario" type="submit">
-            Sair
-          </button>
+          <button className="botao secundario" type="submit">Sair</button>
         </form>
       </header>
 
-      {semEthos && (
-        <p className="alerta sucesso" style={{ marginBottom: "var(--espaco-md)" }}>
-          Seu Ethos ainda não foi concluído. <Link href="/navegante/ethos">Continuar</Link>
-        </p>
-      )}
-
       <section className="cartao">
-        <h2 style={{ marginTop: 0 }}>Meus portos</h2>
+        <h2>Meus portos</h2>
         {portos.length === 0 ? (
           <p className="vazio">Você ainda não está inscrito em nenhum porto.</p>
         ) : (
           <ul className="lista">
-            {portos.map((p) => (
-              <li key={p.id}>
-                <strong>{p.nome}</strong>{" "}
+            {navegante.portos.map(({ porto }) => (
+              <li key={porto.id}>
+                <strong>{porto.nome}</strong>{" "}
                 <span className="ajuda">
-                  · {p.cidade}/{p.uf} · CEP {p.cep}
+                  · {[porto.logradouro, porto.numero, porto.bairro].filter(Boolean).join(", ") || "endereço não informado"}
+                  {" · "}{porto.cidade ?? "—"}/{porto.uf ?? "—"} · CEP {porto.cep ?? "—"}
                 </span>
+                <form action={removerPorto}>
+                  <input type="hidden" name="portoId" value={porto.id} />
+                  <button className="botao secundario" type="submit">Remover</button>
+                </form>
               </li>
             ))}
           </ul>
         )}
+        <h3>Adicionar porto</h3>
+        <FormularioPorto />
       </section>
 
       <section className="cartao">
-        <h2 style={{ marginTop: 0 }}>Vagas para você</h2>
+        <h2>{mostrarTodasVagas ? "Todas as vagas" : "Minhas vagas"}</h2>
         <p className="ajuda">
-          Ordenadas pela proximidade dos seus portos. A compatibilidade com o Ethos entra quando o questionário estiver pronto.
+          {mostrarTodasVagas
+            ? "Todas as vagas ativas, da mais próxima dos seus portos para a menos próxima."
+            : "Vagas mais próximas dos seus portos, da mais para a menos compatível."}
+        </p>
+        <p>
+          {mostrarTodasVagas ? (
+            <Link href="/navegante">Ver só minhas vagas</Link>
+          ) : (
+            <Link href="/navegante?vagas=todas">Ver todas as vagas</Link>
+          )}
         </p>
         {vagas.length === 0 ? (
-          <p className="vazio">Nenhuma vaga ativa no momento.</p>
+          <p className="vazio">Nenhuma vaga próxima dos seus portos no momento.</p>
         ) : (
           <ul className="lista">
             {vagas.map(({ vaga, indice }) => (
               <li key={vaga.id}>
                 <strong>{vaga.titulo}</strong>
-                {portos.length > 0 && <span className="tag">Índice {indice}</span>}
+                <span className="tag">Índice {indice}</span>
                 <div className="ajuda">
                   {[
                     vaga.destino.razaoSocial,
-                    vaga.cidade && vaga.uf ? `${vaga.cidade}/${vaga.uf}` : null,
-                    formatarSalario(vaga.salario),
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
+                    vaga.destino.cidade && vaga.destino.uf ? `${vaga.destino.cidade}/${vaga.destino.uf}` : null,
+                    formatarFaixaSalarial(vaga.salarioMinCentavos, vaga.salarioMaxCentavos),
+                  ].filter(Boolean).join(" · ")}
                 </div>
-                {vaga.descricao && <p style={{ margin: "4px 0 0" }}>{vaga.descricao}</p>}
+                {vaga.descricao && <p className="descricao-vaga">{vaga.descricao}</p>}
+                {vaga.cursos.length > 0 && (
+                  <div className="ajuda">Cursos exigidos: {vaga.cursos.map((c) => c.curso.nome).join(", ")}</div>
+                )}
+                <form action={alternarVaga}>
+                  <input type="hidden" name="vagaId" value={vaga.id} />
+                  <button className="botao secundario" type="submit">
+                    {escolhidasVagas.has(vaga.id) ? "Remover da lista" : "Escolher vaga"}
+                  </button>
+                </form>
               </li>
+            ))}
+          </ul>
+        )}
+        <h3>Vagas escolhidas</h3>
+        {vagasEscolhidas.length === 0 ? (
+          <p className="vazio">Você ainda não escolheu vagas.</p>
+        ) : (
+          <ul className="lista">
+            {vagasEscolhidas.map((vaga) => (
+              <li key={vaga.id}><strong>{vaga.titulo}</strong> <span className="ajuda">· {vaga.destino.razaoSocial}</span></li>
             ))}
           </ul>
         )}
       </section>
 
-      {cursos.size > 0 && (
-        <section className="cartao">
-          <h2 style={{ marginTop: 0 }}>Cursos que podem ajudar</h2>
+      <section className="cartao">
+        <h2>{mostrarTodosCursos ? "Todos os cursos" : "Meus cursos"}</h2>
+        <p className="ajuda">
+          {mostrarTodosCursos
+            ? "Todos os cursos cadastrados, dos mais próximos dos seus portos para os menos próximos."
+            : "Cursos próximos dos seus portos."}
+        </p>
+        <p>
+          {mostrarTodosCursos ? (
+            <Link href="/navegante">Ver só meus cursos</Link>
+          ) : (
+            <Link href="/navegante?cursos=todos">Ver todos os cursos</Link>
+          )}
+        </p>
+        {cursos.length === 0 ? (
+          <p className="vazio">Nenhum curso próximo dos seus portos no momento.</p>
+        ) : (
           <ul className="lista">
-            {[...cursos.values()].map((c) => (
-              <li key={c.id}>
-                <strong>{c.titulo}</strong> <span className="ajuda">· {c.modalidade.toLowerCase()}</span>
+            {cursos.map(({ curso }) => (
+              <li key={curso.id}>
+                <strong>{curso.nome}</strong>{" "}
+                <span className="ajuda">· {curso.cargaHorariaHoras}h · {MODALIDADE_ROTULO[curso.modalidade] ?? curso.modalidade.toLowerCase()}{curso.instituicaoEnsino ? ` · ${curso.instituicaoEnsino}` : ""}</span>
+                <form action={alternarCurso}>
+                  <input type="hidden" name="cursoId" value={curso.id} />
+                  <button className="botao secundario" type="submit">
+                    {escolhidosCursos.has(curso.id) ? "Remover da lista" : "Escolher curso"}
+                  </button>
+                </form>
               </li>
             ))}
           </ul>
-        </section>
-      )}
+        )}
+        <h3>Cursos escolhidos</h3>
+        {cursosEscolhidos.length === 0 ? (
+          <p className="vazio">Você ainda não escolheu cursos.</p>
+        ) : (
+          <ul className="lista">
+            {cursosEscolhidos.map((curso) => (
+              <li key={curso.id}><strong>{curso.nome}</strong></li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="cartao">
+        <h2>Cursos realizados</h2>
+        {navegante.CursoRealizado.length === 0 ? (
+          <p className="vazio">Você ainda não registrou cursos realizados.</p>
+        ) : (
+          <ul className="lista">
+            {navegante.CursoRealizado.map((curso) => (
+              <li key={curso.id}>
+                <strong>{curso.curso}</strong>{" "}
+                <span className="ajuda">
+                  · {curso.instituicao} · {curso.cargaHoraria}h · {MODALIDADE_ROTULO[curso.modalidade ?? ""] ?? "modalidade não informada"}
+                  {" · "}{curso.dataRealizacao.toLocaleDateString("pt-BR", { timeZone: "UTC" })}
+                </span>
+                <p className="descricao-vaga">{curso.descricao}</p>
+                <form action={removerCursoRealizado}>
+                  <input type="hidden" name="cursoRealizadoId" value={curso.id} />
+                  <button className="botao secundario" type="submit">Remover</button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+        <h3>Registrar curso realizado</h3>
+        <FormularioCursoRealizado />
+      </section>
     </main>
   );
 }

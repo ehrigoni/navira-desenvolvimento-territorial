@@ -49,6 +49,10 @@ export async function cadastrar(_: EstadoCadastro, formData: FormData): Promise<
 
   const ident = validarIdentificador(campos.identificador);
   if (ident.erro) erros.identificador = ident.erro;
+  // O banco exige telefone em todo usuário (Usuario.telefone é obrigatório e único).
+  if (ident.chave && ident.chave.tipo !== "telefone") {
+    erros.identificador = "Para criar a conta, informe um celular ou telefone com DDD.";
+  }
 
   const cep = apenasDigitos(campos.cep);
   if (campos.papel === "PORTO") {
@@ -57,8 +61,6 @@ export async function cadastrar(_: EstadoCadastro, formData: FormData): Promise<
     if (!campos.cidade) erros.cidade = "Informe a cidade.";
     if (!/^[A-Z]{2}$/.test(campos.uf)) erros.uf = "Informe a UF com 2 letras.";
     if (!TIPOS.includes(campos.tipo as TipoPorto)) campos.tipo = "OUTRO";
-  } else if (cep && !/^\d{8}$/.test(cep)) {
-    erros.cep = "CEP inválido. Use 8 dígitos.";
   }
 
   if (Object.keys(erros).length) return { erros, campos };
@@ -73,13 +75,14 @@ export async function cadastrar(_: EstadoCadastro, formData: FormData): Promise<
     });
     if (existente) return { erro: MSG.identificadorEmUso, campos };
 
+    const papel = base.data!.papel;
     const usuario = await db.usuario.create({
       data: {
         nome: campos.nome,
         senhaHash,
-        papel: base.data!.papel,
-        ...(chave.tipo === "email" ? { email: chave.valor } : { telefone: chave.valor }),
-        ...(base.data!.papel === "PORTO"
+        papel,
+        telefone: chave.valor,
+        ...(papel === "PORTO"
           ? {
               porto: {
                 create: {
@@ -92,13 +95,13 @@ export async function cadastrar(_: EstadoCadastro, formData: FormData): Promise<
               },
             }
           : {
-              navegante: { create: { cep: cep || null } },
+              navegante: { create: {} },
             }),
       },
     });
 
-    await criarSessao({ sub: usuario.id, nome: usuario.nome, papel: usuario.papel });
-    redirect(destinoPosLogin(usuario));
+    await criarSessao({ sub: usuario.id, nome: usuario.nome, papel });
+    redirect(destinoPosLogin({ papel: usuario.papel }));
   } catch (e) {
     // Corrida entre a checagem e o insert: a constraint única também protege o cadastro.
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {

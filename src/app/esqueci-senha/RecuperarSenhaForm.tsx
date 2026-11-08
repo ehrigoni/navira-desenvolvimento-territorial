@@ -29,8 +29,8 @@ export default function RecuperarSenhaForm() {
         {e.identificador && <p className="erro-campo">{e.identificador}</p>}
       </div>
 
-      <fieldset className="campo" style={{ border: 0, padding: 0, margin: 0 }}>
-        <legend style={{ fontWeight: 600, color: "var(--azul)", fontSize: "0.95rem", marginBottom: 6 }}>Receber por</legend>
+      <fieldset className="campo grupo-opcoes">
+        <legend>Receber por</legend>
         <div className="opcoes">
           <label>
             <input type="radio" name="metodo" value="email" defaultChecked /> E-mail (link)

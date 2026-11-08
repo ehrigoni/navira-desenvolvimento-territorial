@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState, useState, type FormEvent } from "react";
 import { entrar, type EstadoLogin } from "./actions";
 import { validarCredenciais } from "@/lib/validacao";
+import IdentificadorInput from "../IdentificadorInput";
 
 const inicial: EstadoLogin = {};
 
@@ -28,12 +29,12 @@ export default function LoginForm() {
 
       <div className={`campo ${erros.identificador ? "invalido" : ""}`}>
         <label htmlFor="identificador">Celular, telefone ou e-mail</label>
-        <input
+        <IdentificadorInput
           id="identificador"
           name="identificador"
           autoComplete="username"
           defaultValue={identificadorAtual}
-          placeholder="(11) 91234-5678 ou nome@exemplo.com.br"
+          placeholder="(11) 91234-5678 ou nome@sobrenome.com.br"
           aria-invalid={!!erros.identificador}
         />
         {erros.identificador && <p className="erro-campo">{erros.identificador}</p>}
