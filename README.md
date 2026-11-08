@@ -40,7 +40,9 @@ O painel de candidatos fica abaixo de assinatura e contratação. Antes da escol
 
 Os demais candidatos permanecem disponíveis, inclusive em vagas pausadas. O Navegante pode retirar qualquer candidatura enquanto não tiver vínculo ativo. Somente o Porto responsável pode encerrar o vínculo e registrar um motivo opcional, sem ressarcimento; o Navegante volta a ficar disponível e o tempo em dias entre escolha e encerramento é exibido por três meses. O Porto anterior mantém acesso aos contatos até uma escolha por outro Porto. O motivo registrado não é divulgado aos demais Portos.
 
-Antes de publicar esta funcionalidade, aplique [prisma/atualizar-contratacoes.sql](prisma/atualizar-contratacoes.sql) ao banco de destino (`prisma db execute --file prisma/atualizar-contratacoes.sql`). O script não remove registros, mas substitui a unicidade por vaga/candidato para permitir histórico de vínculos.
+Antes de publicar esta funcionalidade, execute `npm run db:atualizar-porto` com `DATABASE_URL` apontando para o banco de destino. O comando aplica [prisma/atualizar-porto.sql](prisma/atualizar-porto.sql) e [prisma/atualizar-contratacoes.sql](prisma/atualizar-contratacoes.sql), inclusive em bancos que ainda não receberam as colunas de assinatura/créditos e as tabelas de pagamentos, apadrinhamentos e apoios. Os scripts são idempotentes e não removem registros; substituem a unicidade por vaga/candidato para permitir histórico de vínculos.
+
+Na Vercel, a atualização pode ser executada em um build de manutenção com `npm run db:atualizar-porto && npm run build`, usando as variáveis de produção já configuradas. Não use `db push` com perda de dados nem copie o `.env` local para o deploy. Para conferir o schema após a atualização, use `npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code` no mesmo ambiente.
 
 ## O que ainda não foi feito
 
