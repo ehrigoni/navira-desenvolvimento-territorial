@@ -15,7 +15,7 @@ export type EstadoCadastro = {
   campos?: Record<string, string>;
 };
 
-const TIPOS: TipoPorto[] = ["IGREJA", "ESCOLA", "ASSOCIACAO", "INICIATIVA", "OUTRO"];
+const TIPOS: TipoPorto[] = ["IGREJA", "ESCOLA", "ASSOCIACAO", "INICIATIVA", "EMPRESA", "OUTRO"];
 
 export async function cadastrar(_: EstadoCadastro, formData: FormData): Promise<EstadoCadastro> {
   const texto = (k: string) => {
@@ -88,6 +88,7 @@ export async function cadastrar(_: EstadoCadastro, formData: FormData): Promise<
               porto: {
                 create: {
                   nome: campos.nomePorto,
+                  aprovacaoPendente: true,
                   tipo: TIPOS.includes(campos.tipo as TipoPorto) ? (campos.tipo as TipoPorto) : "OUTRO",
                   cep,
                   cidade: campos.cidade,
@@ -108,6 +109,7 @@ export async function cadastrar(_: EstadoCadastro, formData: FormData): Promise<
       },
     });
 
+    if (papel === "PORTO") redirect("/entrar?mensagem=porto-em-analise");
     await criarSessao({ sub: usuario.id, nome: usuario.nome, papel });
     redirect(destinoPosLogin({ papel: usuario.papel }));
   } catch (e) {

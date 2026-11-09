@@ -37,6 +37,12 @@ describe("compra e doação de vagas de porto", { skip: !process.env.DATABASE_UR
     assert.equal((await db.porto.findUniqueOrThrow({ where: { id: beneficiario } })).creditosContratacao, 1);
     assert.equal((await db.porto.findUniqueOrThrow({ where: { id: terceiro } })).creditosContratacao, 2);
     assert.equal((await db.apadrinhamento.findUniqueOrThrow({ where: { padrinhoId_afilhadoId: { padrinhoId: beneficiario, afilhadoId: terceiro } } })).cotas, 2);
+    await db.porto.update({ where: { id: terceiro }, data: { aprovacaoPendente: true } });
+    assert.equal(await transferirCreditosPorto(beneficiario, terceiro, 1), "invalido");
+    await db.porto.update({ where: { id: terceiro }, data: { aprovacaoPendente: false, status: "SUSPENSO" } });
+    assert.equal(await transferirCreditosPorto(beneficiario, terceiro, 1), "invalido");
+    assert.equal((await db.porto.findUniqueOrThrow({ where: { id: beneficiario } })).creditosContratacao, 1);
+    assert.equal((await db.porto.findUniqueOrThrow({ where: { id: terceiro } })).creditosContratacao, 2);
 
     const propria = await db.pagamentoPorto.create({
       data: { portoId: pagador, tipo: "CREDITO_CONTRATACAO", quantidade: 2, valorCentavos: 2 * VALOR_COTA_APOIO_CENTAVOS },

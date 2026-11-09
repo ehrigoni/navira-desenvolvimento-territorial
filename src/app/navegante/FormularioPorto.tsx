@@ -66,6 +66,7 @@ export default function FormularioPorto({ nomeInicial = "" }: { nomeInicial?: st
           <option value="ESCOLA">Colégio ou escola</option>
           <option value="ASSOCIACAO">Associação</option>
           <option value="INICIATIVA">Iniciativa</option>
+          <option value="EMPRESA">Empresa</option>
           <option value="OUTRO">Outro</option>
         </select>
         {e.tipo && <p className="erro-campo">{e.tipo}</p>}

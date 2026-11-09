@@ -8,6 +8,7 @@ type Props = {
   autoComplete?: string;
   defaultValue?: string;
   placeholder?: string;
+  required?: boolean;
   "aria-invalid"?: boolean;
 };
 

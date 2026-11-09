@@ -8,7 +8,7 @@ export async function transferirCreditosPorto(padrinhoId: string, afilhadoId: st
 
   return db.$transaction(async (tx) => {
     const ids = [padrinhoId, afilhadoId].sort();
-    const portos = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "Porto" WHERE id IN (${Prisma.join(ids)}) ORDER BY id FOR UPDATE`;
+    const portos = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "Porto" WHERE id IN (${Prisma.join(ids)}) AND NOT "aprovacaoPendente" AND status::text IN ('ATIVO', 'EM_ANALISE') ORDER BY id FOR UPDATE`;
     if (portos.length !== 2) return "invalido" as const;
     const debito = await tx.porto.updateMany({
       where: { id: padrinhoId, creditosContratacao: { gte: quantidade } },

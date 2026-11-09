@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 export const COOKIE_SESSAO = "navira_sessao";
 const DURACAO_MS = 7 * 24 * 60 * 60 * 1000;
 
-export type Papel = "NAVEGANTE" | "PORTO";
+export type Papel = "NAVEGANTE" | "PORTO" | "ADMIN";
 export type Sessao = { sub: string; nome: string; papel: Papel; exp: number };
 
 function segredo() {

@@ -9,6 +9,10 @@ import FormIniciativaPorto from "./FormIniciativaPorto";
 import FormularioRecolhivel from "./FormularioRecolhivel";
 import BuscaBeneficiario from "./BuscaBeneficiario";
 import FormEncerrarVinculo from "./FormEncerrarVinculo";
+import FormDadosPorto from "./FormDadosPorto";
+import AbasPainelPorto from "./AbasPainelPorto";
+import { detalhesVaga } from "@/lib/dados-porto";
+import { municipioComMaisVagas } from "@/lib/impacto";
 import { listarCandidatosPorto, visivelAoPorto } from "@/lib/contratacao-porto";
 import {
   alternarApoioIniciativaPorto,
@@ -73,11 +77,12 @@ export default async function PainelPorto({
   const ativa = assinaturaAtiva(porto, agora);
   const naoEhMeu = { OR: [{ portoId: null }, { portoId: { not: porto.id } }] };
 
-  const [minhasVagas, regiaoVagas, meusCursos, regiaoCursos, minhasIniciativas, outrasIniciativas, apadrinhamentos, pagamentos, candidatos] = await Promise.all([
+  const [minhasVagas, regiaoVagas, meusCursos, regiaoCursos, minhasIniciativas, outrasIniciativas, apadrinhamentos, pagamentos, candidatos, pessoasCadastradas, pessoasAtivas, vagasPublicadas, vagasAtivas, contratacoesRegistradas, contratacoesAtivas, cursosConcluidos, parceriasApadrinhamento, vagasComTerritorio, cursosParaVaga] = await Promise.all([
     db.vaga.findMany({
       where: { portoId: porto.id },
       include: {
         contratacoes: { where: { encerradaEm: null }, select: { naveganteId: true } },
+        cursos: { include: { curso: { select: { nome: true } } } },
       },
       orderBy: { criadaEm: "desc" },
     }),
@@ -151,7 +156,25 @@ export default async function PainelPorto({
       take: 20,
     }),
     listarCandidatosPorto(porto.id, agora),
+    db.navegante.count(),
+    db.navegante.count({ where: { usuario: { ativo: true } } }),
+    db.vaga.count(),
+    db.vaga.count({ where: { ativa: true } }),
+    db.contratacao.count(),
+    db.contratacao.count({ where: { encerradaEm: null } }),
+    db.cursoRealizado.count(),
+    db.apadrinhamento.count({ where: { cotas: { gt: 0 } } }),
+    db.vaga.findMany({
+      where: { ativa: true },
+      select: {
+        destino: { select: { cidade: true, uf: true } },
+        porto: { select: { cidade: true, uf: true } },
+      },
+    }),
+    db.curso.findMany({ select: { id: true, nome: true, instituicaoEnsino: true }, orderBy: { nome: "asc" } }),
   ]);
+
+  const municipioDestaque = municipioComMaisVagas(vagasComTerritorio);
 
   return (
     <main className="conteudo">
@@ -169,9 +192,27 @@ export default async function PainelPorto({
         </form>
       </header>
 
-      {aviso && AVISOS[aviso] && (
-        <p className={`alerta ${["contratado", "cobranca-criada", "transferido", "vinculo-encerrado"].includes(aviso) ? "sucesso" : "erro"}`} role="status">{AVISOS[aviso]}</p>
-      )}
+      <AbasPainelPorto
+        formularioDados={<FormDadosPorto porto={{
+          nome: porto.nome, razaoSocial: porto.razaoSocial, cnpj: porto.cnpj, cnae: porto.cnae,
+          cep: porto.cep, logradouro: porto.logradouro, numero: porto.numero, complemento: porto.complemento,
+          bairro: porto.bairro, cidade: porto.cidade, uf: porto.uf,
+        }} />}
+        dados={{
+          pessoasCadastradas,
+          pessoasAtivas,
+          vagasPublicadas,
+          vagasAtivas,
+          contratacoesRegistradas,
+          contratacoesAtivas,
+          cursosConcluidos,
+          parceriasApadrinhamento,
+          municipioDestaque,
+        }}
+      >
+        {aviso && AVISOS[aviso] && (
+          <p className={`alerta ${["contratado", "cobranca-criada", "transferido", "vinculo-encerrado"].includes(aviso) ? "sucesso" : "erro"}`} role="status">{AVISOS[aviso]}</p>
+        )}
 
       <section className="cartao" id="assinatura">
         <h2>Assinatura e contratação</h2>
@@ -266,6 +307,7 @@ export default async function PainelPorto({
           <ul className="lista">
             {minhasVagas.map((vaga) => {
               const contratados = new Set(vaga.contratacoes.map((c) => c.naveganteId));
+              const detalhes = detalhesVaga(vaga.requisitos);
               return (
                 <li key={vaga.id}>
                   <strong>{vaga.titulo}</strong>{" "}
@@ -275,6 +317,10 @@ export default async function PainelPorto({
                     {" · "}{contratados.size}/{vaga.quantidade} contratado(s)
                   </div>
                   <p className="descricao-vaga">{vaga.descricao}</p>
+                  {detalhes.requisitos && <p className="descricao-vaga"><strong>Requisitos:</strong> {detalhes.requisitos}</p>}
+                  {detalhes.expectativas && <p className="descricao-vaga"><strong>Expectativas:</strong> {detalhes.expectativas}</p>}
+                  {vaga.beneficios.length > 0 && <p className="descricao-vaga"><strong>Benefícios:</strong> {vaga.beneficios.join(", ")}</p>}
+                  {vaga.cursos.length > 0 && <p className="descricao-vaga"><strong>Cursos exigidos:</strong> {vaga.cursos.map(({ curso }) => curso.nome).join(", ")}</p>}
                   <form action={alternarVagaPorto}>
                     <input type="hidden" name="vagaId" value={vaga.id} />
                     <button className="botao secundario" type="submit">{vaga.ativa ? "Pausar vaga" : "Reativar vaga"}</button>
@@ -299,7 +345,7 @@ export default async function PainelPorto({
             ))}
           </ul>
         )}
-        <FormularioRecolhivel rotulo="Publicar vaga"><FormVagaPorto /></FormularioRecolhivel>
+        <FormularioRecolhivel rotulo="Publicar vaga"><FormVagaPorto cursos={cursosParaVaga} /></FormularioRecolhivel>
       </section>
 
       <section className="cartao" id="cursos-do-porto">
@@ -316,7 +362,11 @@ export default async function PainelPorto({
                 <span className="ajuda">
                   {" "}· {curso.cargaHorariaHoras}h · {MODALIDADE_ROTULO[curso.modalidade] ?? curso.modalidade.toLowerCase()}
                   {curso.instituicaoEnsino ? ` · ${curso.instituicaoEnsino}` : ""}
+                  {curso.inicio ? ` · início: ${curso.inicio.toLocaleDateString("pt-BR", { timeZone: "UTC" })}` : ""}
+                  {curso.termino ? ` · término: ${curso.termino.toLocaleDateString("pt-BR", { timeZone: "UTC" })}` : ""}
+                  {curso.vagasDisponiveis !== null ? ` · ${curso.vagasDisponiveis} vaga(s)` : ""}
                 </span>
+                {curso.descricao && <p className="descricao-vaga">{curso.descricao}</p>}
                 <form action={removerCursoPorto} className="form-remover-porto">
                   <input type="hidden" name="cursoId" value={curso.id} />
                   <button className="botao secundario" type="submit">Remover</button>
@@ -492,6 +542,7 @@ export default async function PainelPorto({
           </ul>
         )}
       </section>
+      </AbasPainelPorto>
     </main>
   );
 }

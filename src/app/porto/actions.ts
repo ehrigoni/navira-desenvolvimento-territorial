@@ -9,6 +9,10 @@ import { exigirSessao } from "@/lib/auth";
 import { confirmarPagamentoPorto } from "@/lib/pagamento-porto";
 import { transferirCreditosPorto } from "@/lib/creditos-porto";
 import { encerrarContratacao, selecionarCandidato } from "@/lib/contratacao-porto";
+import { cnpjValido, dataCalendario } from "@/lib/dados-porto";
+import { apenasDigitos } from "@/lib/validacao";
+import { sincronizarMatching } from "@/lib/sincronizar-matching";
+import { descricaoCnae } from "@/lib/cnae";
 import {
   MODALIDADES_FORMULARIO,
   VALOR_COTA_APOIO_CENTAVOS,
@@ -34,11 +38,7 @@ function numero(formData: FormData, chave: string): number | undefined {
 
 /** Data do formulário (AAAA-MM-DD): null se vazia, false se inválida. */
 function data(formData: FormData, chave: string): Date | null | false {
-  const valor = texto(formData, chave);
-  if (valor === "") return null;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(valor)) return false;
-  const d = new Date(`${valor}T00:00:00Z`);
-  return Number.isNaN(d.getTime()) ? false : d;
+  return dataCalendario(texto(formData, chave));
 }
 
 async function portoPorSessao() {
@@ -53,6 +53,67 @@ function atualizarPainel() {
   revalidatePath("/navegante");
 }
 
+export async function consultarCnae(codigo: string): Promise<string | null> {
+  await portoPorSessao();
+  return descricaoCnae(codigo);
+}
+
+export async function atualizarDadosPorto(_: EstadoAcao, formData: FormData): Promise<EstadoAcao> {
+  const porto = await portoPorSessao();
+  const nome = texto(formData, "nome");
+  const razaoSocial = texto(formData, "razaoSocial");
+  const cnpjInformado = texto(formData, "cnpj");
+  const cnpj = apenasDigitos(cnpjInformado);
+  const cnaeInformado = texto(formData, "cnae");
+  const cnae = apenasDigitos(cnaeInformado);
+  const cepInformado = texto(formData, "cep");
+  const cep = apenasDigitos(cepInformado);
+  const cidade = texto(formData, "cidade");
+  const uf = texto(formData, "uf").toUpperCase();
+  const logradouro = texto(formData, "logradouro");
+  const numeroEndereco = texto(formData, "numero");
+  const complemento = texto(formData, "complemento");
+  const bairro = texto(formData, "bairro");
+  const erros: Record<string, string> = {};
+
+  if (!nome) erros.nome = "Informe o nome do porto.";
+  if (cnpjInformado && (!/^[\d./-]+$/.test(cnpjInformado) || !cnpjValido(cnpj))) erros.cnpj = "Informe um CNPJ válido.";
+  if (cnaeInformado && (!/^[\d./-]+$/.test(cnaeInformado) || !/^\d{7}$/.test(cnae))) erros.cnae = "Informe o CNAE com 7 dígitos.";
+  if (!/^[\d-]+$/.test(cepInformado) || !/^\d{8}$/.test(cep)) erros.cep = "Informe um CEP válido com 8 dígitos.";
+  if (!cidade) erros.cidade = "Informe a cidade.";
+  if (!/^[A-Z]{2}$/.test(uf)) erros.uf = "Informe a UF com 2 letras.";
+  if (Object.keys(erros).length) return { erros };
+
+  try {
+    await db.$transaction(async (tx) => {
+      await tx.porto.update({
+        where: { id: porto.id },
+        data: {
+          nome, razaoSocial: razaoSocial || null, cnpj: cnpj || null, cnae: cnae || null,
+          cep, cidade, uf, logradouro: logradouro || null, numero: numeroEndereco || null,
+          complemento: complemento || null, bairro: bairro || null,
+          ...(cep !== porto.cep || cidade !== porto.cidade || uf !== porto.uf
+            || logradouro !== (porto.logradouro ?? "") || numeroEndereco !== (porto.numero ?? "")
+            ? { latitude: null, longitude: null } : {}),
+        },
+      });
+      if (porto.cep !== cep) {
+        await tx.vaga.updateMany({ where: { portoId: porto.id, cep: porto.cep }, data: { cep } });
+        await tx.curso.updateMany({ where: { portoId: porto.id, cep: porto.cep }, data: { cep } });
+      }
+      if (porto.cep !== cep || porto.cidade !== cidade || porto.uf !== uf) {
+        const inscritos = await tx.inscricaoPorto.findMany({ where: { portoId: porto.id }, select: { naveganteId: true } });
+        for (const inscrito of inscritos) await sincronizarMatching(inscrito.naveganteId, tx);
+      }
+    });
+  } catch (e) {
+    console.error("[porto] falha ao atualizar dados", e);
+    return { erro: "Não foi possível atualizar os dados do porto. Tente novamente." };
+  }
+  atualizarPainel();
+  return { sucesso: "Dados do porto atualizados." };
+}
+
 // ---------- Vagas ----------
 
 export async function publicarVaga(_: EstadoAcao, formData: FormData): Promise<EstadoAcao> {
@@ -62,6 +123,10 @@ export async function publicarVaga(_: EstadoAcao, formData: FormData): Promise<E
   const quantidade = numero(formData, "quantidade") ?? 1;
   const minimo = numero(formData, "salarioMin");
   const maximo = numero(formData, "salarioMax");
+  const requisitos = texto(formData, "requisitos");
+  const expectativas = texto(formData, "expectativas");
+  const beneficios = texto(formData, "beneficios").split("\n").map((item) => item.trim()).filter(Boolean);
+  const cursosIds = [...new Set(formData.getAll("cursos").filter((item): item is string => typeof item === "string"))];
 
   const erros: Record<string, string> = {};
   if (!titulo) erros.titulo = "Informe o cargo.";
@@ -69,23 +134,31 @@ export async function publicarVaga(_: EstadoAcao, formData: FormData): Promise<E
   if (!Number.isInteger(quantidade) || quantidade < 1 || quantidade > 999) erros.quantidade = "Informe quantas pessoas a vaga comporta (1 a 999).";
   if ((minimo !== undefined && Number.isNaN(minimo)) || (maximo !== undefined && Number.isNaN(maximo))) {
     erros.salario = "Informe valores numéricos para o salário.";
+  } else if ((minimo !== undefined && (minimo < 0 || minimo > 21_474_836)) || (maximo !== undefined && (maximo < 0 || maximo > 21_474_836))) {
+    erros.salario = "Informe salários entre R$ 0,00 e R$ 21.474.836,00.";
   } else if (minimo !== undefined && maximo !== undefined && minimo > maximo) {
     erros.salario = "O salário mínimo não pode ser maior que o máximo.";
   }
+  if (cursosIds.length > 100) erros.cursos = "Selecione no máximo 100 cursos.";
   if (Object.keys(erros).length) return { erros };
 
   try {
+    if (cursosIds.length && await db.curso.count({ where: { id: { in: cursosIds } } }) !== cursosIds.length) {
+      return { erros: { cursos: "Um dos cursos selecionados não está mais disponível. Atualize a página." } };
+    }
     await db.vaga.create({
       data: {
         portoId: porto.id,
         titulo,
         descricao,
+        requisitos: requisitos || expectativas ? { requisitos, expectativas } : undefined,
         quantidade,
         salarioMinCentavos: minimo === undefined ? null : Math.round(minimo * 100),
         salarioMaxCentavos: maximo === undefined ? null : Math.round(maximo * 100),
         cep: porto.cep,
         valoresEthos: [],
-        beneficios: [],
+        beneficios,
+        cursos: { create: cursosIds.map((cursoId) => ({ curso: { connect: { id: cursoId } } })) },
       },
     });
   } catch (e) {
@@ -151,12 +224,21 @@ export async function publicarCurso(_: EstadoAcao, formData: FormData): Promise<
   const cargaHoraria = numero(formData, "cargaHoraria");
   const instituicaoEnsino = texto(formData, "instituicaoEnsino");
   const modalidade = MODALIDADES_FORMULARIO[texto(formData, "modalidade")];
+  const inicio = data(formData, "inicio");
+  const termino = data(formData, "termino");
+  const vagasDisponiveis = numero(formData, "vagasDisponiveis");
 
   const erros: Record<string, string> = {};
   if (!nome) erros.nome = "Informe o nome do curso.";
   if (cargaHoraria === undefined || !Number.isInteger(cargaHoraria) || cargaHoraria < 1 || cargaHoraria > 5000) erros.cargaHoraria = "Informe a carga horária em horas.";
   if (!instituicaoEnsino) erros.instituicaoEnsino = "Informe a instituição que oferece o curso.";
   if (!modalidade) erros.modalidade = "Escolha a modalidade.";
+  if (inicio === false) erros.inicio = "Data de início inválida.";
+  if (termino === false) erros.termino = "Data de término inválida.";
+  if (inicio && termino && termino < inicio) erros.termino = "O término não pode ser antes do início.";
+  if (vagasDisponiveis !== undefined && (!Number.isInteger(vagasDisponiveis) || vagasDisponiveis < 1 || vagasDisponiveis > 1_000_000)) {
+    erros.vagasDisponiveis = "Informe uma quantidade entre 1 e 1.000.000.";
+  }
   if (Object.keys(erros).length) return { erros };
 
   try {
@@ -168,6 +250,9 @@ export async function publicarCurso(_: EstadoAcao, formData: FormData): Promise<
         cargaHorariaHoras: cargaHoraria as number,
         modalidade,
         instituicaoEnsino,
+        inicio: inicio || null,
+        termino: termino || null,
+        vagasDisponiveis: vagasDisponiveis ?? null,
         cep: porto.cep,
         valoresEthos: [],
       },
@@ -277,7 +362,7 @@ export async function buscarPortosBeneficiarios(termo: string): Promise<PortoBen
   const busca = termo.trim();
   if (busca.length < 2) return [];
   return db.porto.findMany({
-    where: { id: { not: porto.id }, nome: { contains: busca, mode: "insensitive" } },
+    where: { id: { not: porto.id }, nome: { contains: busca, mode: "insensitive" }, aprovacaoPendente: false, status: { in: ["ATIVO", "EM_ANALISE"] } },
     select: { id: true, nome: true, cidade: true, uf: true, cep: true },
     orderBy: [{ nome: "asc" }, { id: "asc" }],
     take: 20,
@@ -287,7 +372,7 @@ export async function buscarPortosBeneficiarios(termo: string): Promise<PortoBen
 export async function adicionarBeneficiario(afilhadoId: string): Promise<{ erro?: string }> {
   const porto = await portoPorSessao();
   if (!afilhadoId || afilhadoId === porto.id) return { erro: "Escolha outro porto." };
-  const afilhado = await db.porto.findUnique({ where: { id: afilhadoId }, select: { id: true } });
+  const afilhado = await db.porto.findFirst({ where: { id: afilhadoId, aprovacaoPendente: false, status: { in: ["ATIVO", "EM_ANALISE"] } }, select: { id: true } });
   if (!afilhado) return { erro: "Porto beneficiário não encontrado." };
   await db.apadrinhamento.upsert({
     where: { padrinhoId_afilhadoId: { padrinhoId: porto.id, afilhadoId } },
@@ -315,7 +400,7 @@ export async function comprarCotas(formData: FormData) {
   if (quantidade === undefined || !Number.isInteger(quantidade) || quantidade < 1 || quantidade > 100) redirect("/porto?aviso=quantidade-invalida");
 
   if (afilhadoId && afilhadoId !== porto.id) {
-    const afilhado = await db.porto.findUnique({ where: { id: afilhadoId }, select: { id: true } });
+    const afilhado = await db.porto.findFirst({ where: { id: afilhadoId, aprovacaoPendente: false, status: { in: ["ATIVO", "EM_ANALISE"] } }, select: { id: true } });
     if (!afilhado) redirect("/porto?aviso=porto-invalido");
   }
 

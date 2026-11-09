@@ -3,8 +3,8 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { assinarPerfil, montarPerfilMatching } from "@/lib/matching-navegante";
 
-export async function sincronizarMatching(naveganteId: string) {
-  const navegante = await db.navegante.findUniqueOrThrow({
+export async function sincronizarMatching(naveganteId: string, cliente: Pick<Prisma.TransactionClient, "navegante" | "matchingNavegante"> = db) {
+  const navegante = await cliente.navegante.findUniqueOrThrow({
     where: { id: naveganteId },
     select: {
       ethosConcluidoEm: true,
@@ -20,11 +20,11 @@ export async function sincronizarMatching(naveganteId: string) {
   });
   const assinatura = assinarPerfil(perfil);
 
-  const atual = await db.matchingNavegante.findUnique({ where: { naveganteId }, select: { assinatura: true } });
+  const atual = await cliente.matchingNavegante.findUnique({ where: { naveganteId }, select: { assinatura: true } });
   if (atual?.assinatura === assinatura) return;
 
   const json = perfil as unknown as Prisma.InputJsonValue;
-  await db.matchingNavegante.upsert({
+  await cliente.matchingNavegante.upsert({
     where: { naveganteId },
     create: { naveganteId, perfil: json, assinatura, atualizadoEm: new Date() },
     update: { perfil: json, assinatura, atualizadoEm: new Date() },

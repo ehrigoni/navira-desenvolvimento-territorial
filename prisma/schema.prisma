@@ -84,6 +84,9 @@ model Porto {
   id                  String              @id @default(cuid())
   usuarioId           String?             @unique
   nome                String
+  razaoSocial         String?
+  cnpj                String?
+  cnae                String?
   tipo                TipoPorto?
   cep                 String?
   distrito            String?
@@ -105,6 +108,7 @@ model Porto {
   identificador       String?
   nomeFantasia        String?
   status              StatusPorto         @default(EM_ANALISE)
+  aprovacaoPendente   Boolean             @default(false)
   telefoneContato     String?
   tipoIdentificador   TipoIdentificador   @default(SEM_REGISTRO)
   assinaturaAteEm     DateTime?
@@ -278,6 +282,7 @@ model Administrador {
   nome                String
   senhaHash           String
   ativo               Boolean         @default(true)
+  aprovacaoPendente   Boolean         @default(false)
   trocarSenha         Boolean         @default(true)
   tentativasFalhas    Int             @default(0)
   bloqueadoAte        DateTime?
@@ -286,6 +291,18 @@ model Administrador {
   criadoPorId         String?
   Administrador       Administrador?  @relation("AdministradorToAdministrador", fields: [criadoPorId], references: [id])
   other_Administrador Administrador[] @relation("AdministradorToAdministrador")
+  convites            ConviteAdministrador[]
+}
+
+model ConviteAdministrador {
+  tokenHash   String        @id
+  criadoPorId String
+  criadoEm    DateTime      @default(now())
+  expiraEm    DateTime
+  usadoEm     DateTime?
+  criador     Administrador @relation(fields: [criadoPorId], references: [id], onDelete: Cascade)
+
+  @@index([criadoPorId])
 }
 
 model Apoiador {
@@ -774,6 +791,7 @@ enum TipoPagamentoPorto {
 }
 
 enum TipoPorto {
+  EMPRESA
   IGREJA
   ESCOLA
   ASSOCIACAO

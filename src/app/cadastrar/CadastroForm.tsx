@@ -81,6 +81,7 @@ export default function CadastroForm({ papelInicial }: { papelInicial: "NAVEGANT
               <option value="ESCOLA">Escola</option>
               <option value="ASSOCIACAO">Associação</option>
               <option value="INICIATIVA">Iniciativa</option>
+              <option value="EMPRESA">Empresa</option>
               <option value="OUTRO">Outro</option>
             </select>
           </div>

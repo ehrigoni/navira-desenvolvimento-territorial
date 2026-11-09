@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { obterSessaoAtiva } from "@/lib/auth";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -7,7 +8,8 @@ export const metadata: Metadata = {
   description: "Plataforma de desenvolvimento territorial",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const sessao = await obterSessaoAtiva();
   return (
     <html lang="pt-BR">
       <body>
@@ -16,7 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             NAVIRA
           </Link>
           <nav className="links">
-            <Link href="/entrar">Entrar</Link>
+            {sessao ? <form action="/sair" method="post"><button type="submit" className="cabecalho-sair">Sair</button></form> : <Link href="/entrar">Entrar</Link>}
           </nav>
         </header>
         {children}

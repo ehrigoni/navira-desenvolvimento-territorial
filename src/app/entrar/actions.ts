@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { criarSessao } from "@/lib/session";
 import { destinoPosLogin } from "@/lib/fluxos";
 import { MSG, validarLogin } from "@/lib/validacao";
+import { autenticarAdministrador } from "@/lib/admin-login";
 
 export type EstadoLogin = {
   erro?: string;
@@ -22,13 +23,26 @@ export async function entrar(_: EstadoLogin, formData: FormData): Promise<Estado
   const campos = { identificador: v.identificador };
   if (!v.valido || !v.chave) return { erros: v.erros, campos };
 
+  // Administradores usam a mesma tela de entrada, mas uma identidade e sessão separadas.
+  try {
+    const admin = await autenticarAdministrador(v.chave.valor, v.senha);
+    if (admin) {
+      await criarSessao({ sub: admin.id, nome: admin.nome, papel: "ADMIN" });
+      redirect(admin.trocarSenha ? "/admin/senha" : "/admin");
+    }
+  } catch (e) {
+    if (typeof e === "object" && e !== null && "digest" in e && String(e.digest).startsWith("NEXT_REDIRECT")) throw e;
+    console.error("[login] falha ao consultar administrador", e);
+    return { erro: MSG.loginIndisponivel, campos };
+  }
+
   // 2) Conferência de credenciais. Falhas de banco não derrubam a tela.
   let usuario;
   let confere = false;
   try {
     usuario = await db.usuario.findUnique({
       where: v.chave.tipo === "email" ? { email: v.chave.valor } : { telefone: v.chave.valor },
-      include: { navegante: { select: { ethosConcluidoEm: true } } },
+      include: { navegante: { select: { ethosConcluidoEm: true } }, porto: { select: { status: true, aprovacaoPendente: true } } },
     });
     hashFalso ??= bcrypt.hashSync("navira-dummy", 12);
     confere = await bcrypt.compare(v.senha, usuario?.senhaHash ?? hashFalso);
@@ -40,6 +54,9 @@ export async function entrar(_: EstadoLogin, formData: FormData): Promise<Estado
   // Mesma mensagem para usuário inexistente, senha errada, conta inativa ou papel sem acesso a este app.
   if (!usuario || !confere || !usuario.ativo) return { erro: MSG.login, campos };
   if (usuario.papel !== "NAVEGANTE" && usuario.papel !== "PORTO") return { erro: MSG.login, campos };
+  if (usuario.papel === "PORTO" && (!usuario.porto || usuario.porto.aprovacaoPendente || !["ATIVO", "EM_ANALISE"].includes(usuario.porto.status))) {
+    redirect("/entrar?mensagem=porto-indisponivel");
+  }
 
   // 3) Sessão e último login. Falha ao registrar o login não impede a entrada.
   try {

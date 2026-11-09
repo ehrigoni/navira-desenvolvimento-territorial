@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/auth";
 import { calcularIndiceLocal, formatarFaixaSalarial } from "@/lib/matching";
 import { CATEGORIA_INICIATIVA_ROTULO } from "@/lib/porto-regras";
+import { detalhesVaga } from "@/lib/dados-porto";
 import BuscaPorto from "./BuscaPorto";
 import BuscaEscolha from "./BuscaEscolha";
 import FormularioCursoRealizado from "./FormularioCursoRealizado";
@@ -36,7 +37,7 @@ export default async function PainelNavegante({
     include: {
       portos: { include: { porto: true } },
       CursoRealizado: { orderBy: { dataRealizacao: "desc" } },
-      vagas: { select: { vagaId: true, vaga: { include: { destino: { select: { razaoSocial: true } }, porto: { select: { id: true, nome: true } } } } } },
+      vagas: { select: { vagaId: true, vaga: { include: { destino: { select: { razaoSocial: true } }, porto: { select: { id: true, nome: true } }, cursos: { include: { curso: { select: { nome: true } } } } } } } },
       Contratacao: { where: { encerradaEm: null }, select: { Porto: { select: { nome: true } } } },
       cursos: { select: { cursoId: true } },
     },
@@ -84,6 +85,9 @@ export default async function PainelNavegante({
         : null,
       formatarFaixaSalarial(vaga.salarioMinCentavos, vaga.salarioMaxCentavos),
       vaga.cursos.length > 0 ? `Cursos exigidos: ${vaga.cursos.map((c) => c.curso.nome).join(", ")}` : null,
+      detalhesVaga(vaga.requisitos).requisitos ? `Requisitos: ${detalhesVaga(vaga.requisitos).requisitos}` : null,
+      detalhesVaga(vaga.requisitos).expectativas ? `Expectativas: ${detalhesVaga(vaga.requisitos).expectativas}` : null,
+      vaga.beneficios.length ? `Benefícios: ${vaga.beneficios.join(", ")}` : null,
     ].filter(Boolean).join(" · "),
     escolhido: escolhidasVagas.has(vaga.id),
     indice,
@@ -122,6 +126,9 @@ export default async function PainelNavegante({
       `${curso.cargaHorariaHoras}h`,
       MODALIDADE_ROTULO[curso.modalidade] ?? curso.modalidade.toLowerCase(),
       curso.instituicaoEnsino,
+      curso.inicio ? `Início: ${curso.inicio.toLocaleDateString("pt-BR", { timeZone: "UTC" })}` : null,
+      curso.termino ? `Término: ${curso.termino.toLocaleDateString("pt-BR", { timeZone: "UTC" })}` : null,
+      curso.vagasDisponiveis !== null ? `${curso.vagasDisponiveis} vaga(s)` : null,
     ].filter(Boolean).join(" · "),
     escolhido: escolhidosCursos.has(curso.id),
     indice,
@@ -227,6 +234,11 @@ export default async function PainelNavegante({
                 </form>}
                 {!vaga.ativa && <span className="tag">Vaga pausada · candidatura mantida</span>}
                 <div className="ajuda">{vaga.destino?.razaoSocial ?? vaga.porto?.nome}</div>
+                <p className="descricao-vaga">{vaga.descricao}</p>
+                {detalhesVaga(vaga.requisitos).requisitos && <p className="descricao-vaga"><strong>Requisitos:</strong> {detalhesVaga(vaga.requisitos).requisitos}</p>}
+                {detalhesVaga(vaga.requisitos).expectativas && <p className="descricao-vaga"><strong>Expectativas:</strong> {detalhesVaga(vaga.requisitos).expectativas}</p>}
+                {vaga.beneficios.length > 0 && <p className="descricao-vaga"><strong>Benefícios:</strong> {vaga.beneficios.join(", ")}</p>}
+                {vaga.cursos.length > 0 && <p className="descricao-vaga"><strong>Cursos exigidos:</strong> {vaga.cursos.map(({ curso }) => curso.nome).join(", ")}</p>}
                 {!vinculoAtivo && vaga.porto && <form action={retirarCandidaturasPorto}>
                   <input type="hidden" name="portoId" value={vaga.porto.id} />
                   <button className="botao secundario" type="submit">Retirar todas as candidaturas de {vaga.porto.nome}</button>

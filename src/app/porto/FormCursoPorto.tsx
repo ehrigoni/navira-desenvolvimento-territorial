@@ -53,6 +53,21 @@ export default function FormCursoPorto() {
         {e.modalidade && <p className="erro-campo">{e.modalidade}</p>}
       </div>
 
+      <div className={`campo ${e.inicio || e.termino ? "invalido" : ""}`}>
+        <label htmlFor="curso-porto-inicio">Data de início (opcional)</label>
+        <input id="curso-porto-inicio" name="inicio" type="date" />
+        {e.inicio && <p className="erro-campo">{e.inicio}</p>}
+        <label htmlFor="curso-porto-termino">Data de término (opcional)</label>
+        <input id="curso-porto-termino" name="termino" type="date" />
+        {e.termino && <p className="erro-campo">{e.termino}</p>}
+      </div>
+
+      <div className={`campo ${e.vagasDisponiveis ? "invalido" : ""}`}>
+        <label htmlFor="curso-porto-vagas">Vagas disponíveis (opcional)</label>
+        <input id="curso-porto-vagas" name="vagasDisponiveis" type="number" min={1} max={1000000} />
+        {e.vagasDisponiveis && <p className="erro-campo">{e.vagasDisponiveis}</p>}
+      </div>
+
       <button className="botao" type="submit" disabled={pendente}>
         {pendente ? "Salvando..." : "Cadastrar curso"}
       </button>

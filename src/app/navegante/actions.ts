@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { Modalidade, Prisma, StatusPorto, TipoPorto } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
+import { detalhesVaga } from "@/lib/dados-porto";
 import { exigirSessao } from "@/lib/auth";
 import { sincronizarMatching } from "@/lib/sincronizar-matching";
 import { formatarFaixaSalarial } from "@/lib/matching";
@@ -13,7 +14,7 @@ import { redirect } from "next/navigation";
 
 export type EstadoAcao = { erro?: string; erros?: Record<string, string>; sucesso?: string };
 
-const TIPOS_PORTO: TipoPorto[] = ["IGREJA", "ESCOLA", "ASSOCIACAO", "INICIATIVA", "OUTRO"];
+const TIPOS_PORTO: TipoPorto[] = ["IGREJA", "ESCOLA", "ASSOCIACAO", "INICIATIVA", "EMPRESA", "OUTRO"];
 const MODALIDADES: Record<string, Modalidade> = { PRESENCIAL: "PRESENCIAL", ONLINE: "REMOTA", AMBOS: "HIBRIDA" };
 
 function texto(formData: FormData, chave: string) {
@@ -187,6 +188,7 @@ export async function buscarPortos(termo: string): Promise<PortoEncontrado[]> {
     FROM "Porto" p
     WHERE unaccent(p.nome) ILIKE unaccent(${padrao})
       AND p.status::text IN ('ATIVO', 'EM_ANALISE')
+      AND NOT p."aprovacaoPendente"
     ORDER BY p.nome
     LIMIT 8`);
   return portos;
@@ -196,7 +198,7 @@ export async function buscarPortos(termo: string): Promise<PortoEncontrado[]> {
 export async function vincularPorto(formData: FormData) {
   const naveganteId = await navegantePorSessao();
   const portoId = texto(formData, "portoId");
-  const porto = await db.porto.findFirst({ where: { id: portoId, status: { in: STATUS_BUSCAVEIS } }, select: { id: true } });
+  const porto = await db.porto.findFirst({ where: { id: portoId, status: { in: STATUS_BUSCAVEIS }, aprovacaoPendente: false }, select: { id: true } });
   if (porto) {
     await db.inscricaoPorto.upsert({
       where: { naveganteId_portoId: { naveganteId, portoId } },
@@ -223,10 +225,13 @@ export async function buscarVagas(termo: string): Promise<ItemBusca[]> {
   if (termo.trim().length < 2) return [];
   const padrao = padraoBusca(termo);
   // Vaga vem de uma empresa (Destino) ou de um porto (Vaga.portoId): o que estiver preenchido vale.
-  const linhas = await db.$queryRaw<{ id: string; titulo: string; razao: string | null; cidade: string | null; uf: string | null; min: number | null; max: number | null; escolhido: boolean }[]>(Prisma.sql`
+  const linhas = await db.$queryRaw<{ id: string; titulo: string; razao: string | null; cidade: string | null; uf: string | null; min: number | null; max: number | null; requisitos: unknown; beneficios: string[]; cursos: string | null; escolhido: boolean }[]>(Prisma.sql`
     SELECT v.id, v.titulo, COALESCE(d."razaoSocial", p.nome) AS razao,
            COALESCE(d.cidade, p.cidade) AS cidade, COALESCE(d.uf, p.uf) AS uf,
            v."salarioMinCentavos" AS min, v."salarioMaxCentavos" AS max,
+           v.requisitos, v.beneficios,
+           (SELECT string_agg(c.nome, ', ' ORDER BY c.nome)
+            FROM "VagaCurso" vc JOIN "Curso" c ON c.id = vc."cursoId" WHERE vc."vagaId" = v.id) AS cursos,
            EXISTS (SELECT 1 FROM "VagaNavegante" vn WHERE vn."vagaId" = v.id AND vn."naveganteId" = ${naveganteId}) AS escolhido
     FROM "Vaga" v
     LEFT JOIN "Destino" d ON d.id = v."destinoId"
@@ -238,7 +243,13 @@ export async function buscarVagas(termo: string): Promise<ItemBusca[]> {
   return linhas.map((l) => ({
     id: l.id,
     titulo: l.titulo,
-    detalhe: [l.razao, l.cidade && l.uf ? `${l.cidade}/${l.uf}` : null, formatarFaixaSalarial(l.min, l.max)].filter(Boolean).join(" · "),
+    detalhe: [
+      l.razao, l.cidade && l.uf ? `${l.cidade}/${l.uf}` : null, formatarFaixaSalarial(l.min, l.max),
+      l.cursos ? `Cursos exigidos: ${l.cursos}` : null,
+      detalhesVaga(l.requisitos).requisitos ? `Requisitos: ${detalhesVaga(l.requisitos).requisitos}` : null,
+      detalhesVaga(l.requisitos).expectativas ? `Expectativas: ${detalhesVaga(l.requisitos).expectativas}` : null,
+      l.beneficios.length ? `Benefícios: ${l.beneficios.join(", ")}` : null,
+    ].filter(Boolean).join(" · "),
     escolhido: l.escolhido,
   }));
 }
@@ -248,8 +259,9 @@ export async function buscarCursos(termo: string): Promise<ItemBusca[]> {
   const naveganteId = await navegantePorSessao();
   if (termo.trim().length < 2) return [];
   const padrao = padraoBusca(termo);
-  const linhas = await db.$queryRaw<{ id: string; nome: string; carga: number; modalidade: string; instituicao: string | null; escolhido: boolean }[]>(Prisma.sql`
+  const linhas = await db.$queryRaw<{ id: string; nome: string; carga: number; modalidade: string; instituicao: string | null; inicio: Date | null; termino: Date | null; vagas: number | null; escolhido: boolean }[]>(Prisma.sql`
     SELECT c.id, c.nome, c."cargaHorariaHoras" AS carga, c.modalidade::text AS modalidade, c."instituicaoEnsino" AS instituicao,
+           c.inicio, c.termino, c."vagasDisponiveis" AS vagas,
            EXISTS (SELECT 1 FROM "CursoNavegante" cn WHERE cn."cursoId" = c.id AND cn."naveganteId" = ${naveganteId}) AS escolhido
     FROM "Curso" c
     WHERE unaccent(c.nome) ILIKE unaccent(${padrao})
@@ -258,7 +270,12 @@ export async function buscarCursos(termo: string): Promise<ItemBusca[]> {
   return linhas.map((l) => ({
     id: l.id,
     titulo: l.nome,
-    detalhe: [`${l.carga}h`, MODALIDADE_CURTA[l.modalidade] ?? l.modalidade.toLowerCase(), l.instituicao].filter(Boolean).join(" · "),
+    detalhe: [
+      `${l.carga}h`, MODALIDADE_CURTA[l.modalidade] ?? l.modalidade.toLowerCase(), l.instituicao,
+      l.inicio ? `Início: ${l.inicio.toLocaleDateString("pt-BR", { timeZone: "UTC" })}` : null,
+      l.termino ? `Término: ${l.termino.toLocaleDateString("pt-BR", { timeZone: "UTC" })}` : null,
+      l.vagas !== null ? `${l.vagas} vaga(s)` : null,
+    ].filter(Boolean).join(" · "),
     escolhido: l.escolhido,
   }));
 }

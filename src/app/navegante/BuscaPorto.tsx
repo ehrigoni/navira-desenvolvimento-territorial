@@ -9,6 +9,7 @@ const ROTULO_TIPO: Record<string, string> = {
   ESCOLA: "escola",
   ASSOCIACAO: "associação",
   INICIATIVA: "iniciativa",
+  EMPRESA: "empresa",
   OUTRO: "outro",
 };
 
@@ -83,7 +84,7 @@ export default function BuscaPorto() {
           aria-expanded={resultados.length > 0}
           aria-controls="resultados-porto"
           aria-activedescendant={resultados.length > 0 ? `porto-opcao-${destaque}` : undefined}
-          placeholder="Digite o nome da igreja, escola ou associação"
+          placeholder="Digite o nome da igreja, escola, associação ou empresa"
           value={termo}
           disabled={vinculando}
           onChange={(evento) => {

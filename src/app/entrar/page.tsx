@@ -11,6 +11,8 @@ export default async function PaginaEntrar({ searchParams }: { searchParams: Pro
           Senha alterada com sucesso! Faça login com sua nova senha.
         </p>
       )}
+      {mensagem === "porto-em-analise" && <p className="alerta sucesso" role="status">Cadastro recebido. Seu Porto poderá entrar após a aprovação da administração.</p>}
+      {mensagem === "porto-indisponivel" && <p className="alerta erro" role="alert">Este Porto está aguardando aprovação ou não está habilitado. Entre em contato com a administração.</p>}
       <div className="cartao">
         <LoginForm />
       </div>

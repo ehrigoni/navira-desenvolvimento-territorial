@@ -68,8 +68,10 @@ a:hover { color: var(--azul); }
 .marca { font-size: 1.08rem; font-weight: 700; letter-spacing: 0.14em; }
 .marca::after { content: " ~"; color: var(--verde); letter-spacing: 0; }
 .cabecalho .links { gap: var(--espaco-lg); }
-.cabecalho .links a { font-size: 0.95rem; font-weight: 500; }
-.cabecalho .links a:hover { color: #b9e3dc; }
+.cabecalho .links a, .cabecalho-sair { font: inherit; font-size: 0.95rem; font-weight: 500; }
+.cabecalho .links form { margin: 0; }
+.cabecalho-sair { padding: 0; border: 0; background: transparent; color: var(--branco); line-height: inherit; cursor: pointer; }
+.cabecalho .links a:hover, .cabecalho-sair:hover { color: #b9e3dc; }
 
 main.conteudo {
   width: min(100% - 48px, 960px);
@@ -196,6 +198,28 @@ p { margin-top: 0; }
 
 .ajuda { color: var(--cinza); font-size: 0.88rem; }
 .erro-campo { color: var(--erro); font-size: 0.875rem; margin: 0; }
+
+.admin-acoes, .admin-lista li { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.admin-acoes { justify-content: flex-start; margin-bottom: var(--espaco-lg); }
+.admin-indicadores, .admin-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 16px; }
+.admin-indicador { border-top: 4px solid var(--verde); display: grid; gap: 6px; }
+.admin-indicador:nth-child(3n + 2) { border-top-color: var(--dourado); }
+.admin-indicador:nth-child(3n) { border-top-color: var(--azul-medio); }
+.admin-indicador strong { color: var(--azul); font-size: 2rem; }
+.admin-lista { list-style: none; padding: 0; margin: 0; }
+.admin-lista li { padding: 12px 0; border-bottom: 1px solid var(--borda); }
+.admin-lista li.admin-porto-linha { display: block; line-height: 2; overflow-wrap: anywhere; }
+.admin-porto-cursos-status { display: inline-flex; align-items: center; gap: 8px; vertical-align: middle; white-space: nowrap; }
+.admin-status-porto { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 4px 12px; border: 2px solid; border-radius: 999px; font: inherit; font-size: 0.8rem; font-weight: 700; line-height: 1.2; white-space: nowrap; cursor: pointer; }
+.admin-status-porto-ativo { color: #075449; background: #e2f4ee; border-color: #4bae9f; }
+.admin-status-porto-analise { color: #6b4c0d; background: #fbf2da; border-color: #c9a55c; }
+.admin-status-porto-inativo { color: #0b3d5c; background: #e9f0f3; border-color: #7c9eac; }
+.admin-status-porto:hover { filter: brightness(0.94); }
+.admin-status-porto:focus-visible { outline: 3px solid #0b3d5c; outline-offset: 3px; }
+.admin-grafico { display: grid; gap: 12px; }
+.admin-grafico-rotulo { display: flex; justify-content: space-between; gap: 12px; }
+.admin-trilho { height: 10px; border-radius: 8px; background: #e6f5f1; overflow: hidden; }
+.admin-barra { height: 100%; background: var(--verde); border-radius: inherit; }
 
 .alerta {
   padding: var(--espaco-sm) var(--espaco-md);
@@ -476,8 +500,118 @@ a.ethos-navegacao-item:hover { background: #f3f8f8; border-color: var(--azul-med
 .descricao-vaga { margin: var(--espaco-xs) 0 0; }
 .vazio-sem-margem { margin: 0; }
 
+.abas-painel-porto { margin-top: var(--espaco-lg); }
+.mapa-portos-svg { display: block; width: 100%; max-height: 580px; margin: var(--espaco-md) auto; background: #f0f7f6; border-radius: 12px; }
+.mapa-tipos { display: flex; flex-wrap: wrap; gap: var(--espaco-xs); margin: var(--espaco-md) 0; }
+.mapa-tipos .botao { background: #e7f2ef; border: 1px solid #4bae9f; color: #0b3d5c; }
+.mapa-tipos .botao[aria-pressed="true"] { background: #0b3d5c; border-color: #0b3d5c; color: #fff; }
+.mapa-tipo-cor { display: inline-block; flex: none; width: 12px; height: 12px; margin-right: 7px; border: 1px solid #fff; border-radius: 50%; }
+.marcador-porto { stroke: #fff; stroke-width: 1; }
+.mapa-municipio { fill: #dce8e7; stroke: #fff; stroke-width: 1.5; }
+.mapa-municipio.com-portos { fill: #4bae9f; }
+.mapa-municipio.com-cnaes { fill: #c9a55c; }
+.mapa-portos-legenda { display: flex; flex-wrap: wrap; gap: var(--espaco-md); color: #0b3d5c; }
+.mapa-portos-legenda span { display: inline-flex; align-items: center; gap: 6px; }
+.mapa-portos-legenda i { width: 14px; height: 14px; border-radius: 3px; }
+.mapa-legenda-com { background: #4bae9f; }
+.mapa-legenda-cnae { background: #c9a55c; }
+.mapa-legenda-sem { background: #dce8e7; }
+.mapa-portos details { margin-top: var(--espaco-md); }
+.mapa-portos summary { color: #0b3d5c; font-weight: 700; cursor: pointer; }
+.mapa-ceps-lista { max-height: 480px; overflow-y: auto; padding: 0 var(--espaco-sm); border: 1px solid #dce8e7; border-radius: 8px; }
+.abas-painel-lista {
+  display: flex;
+  gap: var(--espaco-sm);
+  overflow-x: auto;
+  margin-bottom: var(--espaco-lg);
+}
+.aba-painel-porto {
+  min-height: 50px;
+  min-width: 180px;
+  padding: 10px 22px;
+  border: 2px solid var(--azul);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--azul);
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: var(--sombra-cartao);
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 140ms ease;
+}
+.aba-painel-porto:hover { background: rgb(31 92 122 / 8%); transform: translateY(-1px); }
+.aba-painel-porto[aria-selected="true"] { background: var(--azul); border-color: var(--azul); color: var(--branco); }
+.aba-painel-porto-impacto[aria-selected="true"] { background: var(--verde); border-color: var(--verde); color: var(--tinta); }
+.aba-painel-porto-impacto:hover { border-color: var(--verde); }
+.aba-painel-porto-empresas[aria-selected="true"] { background: var(--dourado); border-color: var(--dourado); color: var(--tinta); }
+.aba-painel-porto-empresas:hover { border-color: var(--dourado); }
+.aba-painel-porto:focus-visible { outline: 3px solid var(--dourado); outline-offset: 3px; }
+.grade-metricas-impacto, .grade-indices-impacto {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--espaco-md);
+}
+.metrica-impacto, .indice-impacto {
+  min-width: 0;
+  padding: var(--espaco-md);
+  border: 1px solid rgb(11 61 92 / 15%);
+  border-top: 4px solid var(--verde);
+  border-radius: 12px;
+  background: rgb(75 174 159 / 9%);
+}
+.metrica-impacto:nth-child(3n + 2), .indice-impacto:nth-child(even) { border-top-color: var(--dourado); background: rgb(201 165 92 / 12%); }
+.metrica-impacto:nth-child(3n), .indice-impacto:nth-child(odd) { border-top-color: var(--azul-medio); background: rgb(31 92 122 / 7%); }
+.metrica-impacto h3, .indice-impacto h3 { margin: 0; color: var(--azul); font-size: 0.98rem; }
+.metrica-impacto-valor { margin: var(--espaco-xs) 0 0; color: var(--azul); font-size: 1.65rem; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.metrica-impacto .ajuda { margin: var(--espaco-xs) 0 0; }
+.painel-impacto { border-top: 4px solid var(--azul); }
+.painel-impacto-score { border-top-color: var(--verde); }
+.painel-impacto-pendentes { border-top-color: var(--dourado); }
+.indice-impacto-cabecalho { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--espaco-sm); }
+.indice-impacto-cabecalho h3 span { color: var(--azul-medio); }
+.indice-impacto-cabecalho > strong { flex: 0 0 auto; color: var(--azul); }
+.indice-impacto p { margin: var(--espaco-sm) 0 0; }
+.indice-impacto-clicavel { cursor: pointer; }
+.indice-impacto-expansivel summary { cursor: pointer; list-style: none; }
+.indice-impacto-expansivel summary::-webkit-details-marker { display: none; }
+.indice-impacto-expansivel summary:focus-visible { outline: 3px solid var(--azul); outline-offset: 4px; border-radius: 4px; }
+.indice-impacto-titulo { color: var(--azul); font-size: 0.98rem; font-weight: 700; }
+.indice-impacto-titulo strong { color: var(--azul-medio); }
+.indice-impacto-resumo, .indice-impacto-acao { display: block; margin-top: var(--espaco-sm); }
+.indice-impacto-acao { color: var(--azul); font-weight: 700; }
+.indice-impacto-expansivel[open] .indice-impacto-acao span { display: inline-block; transform: rotate(180deg); }
+.indice-impacto-indicadores { list-style: none; padding: 0; margin: var(--espaco-md) 0 0; display: grid; gap: var(--espaco-sm); }
+.indice-impacto-indicadores li { padding: var(--espaco-sm); border-radius: 8px; background: rgb(255 255 255 / 75%); }
+.indice-impacto-indicadores li > div { display: flex; justify-content: space-between; gap: var(--espaco-xs); flex-wrap: wrap; color: var(--azul); }
+.indice-impacto-indicadores li > div span { font-size: 0.8rem; font-weight: 700; }
+.indice-impacto-indicadores p { font-size: 0.88rem; }
+.indice-impacto-indicadores .indice-impacto-disponibilidade { color: var(--azul); font-weight: 700; }
+.lista-indicadores-pendentes > li p { margin: var(--espaco-xs) 0 0; }
+.painel-empresa { margin-bottom: var(--espaco-md); border-top: 4px solid var(--azul); }
+.painel-empresa h2 { margin: 0 0 var(--espaco-sm); font-size: 1.15rem; }
+.painel-empresa-cadastro { border-top-color: var(--azul-medio); background: rgb(31 92 122 / 6%); }
+.grade-dados-porto { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: var(--espaco-md); }
+.grade-dados-porto > .campo { align-content: start; }
+#painel-porto-gestao > .cartao { border-top: 4px solid var(--azul); }
+#painel-porto-gestao > .cartao:nth-of-type(3n + 2) { border-top-color: var(--verde); }
+#painel-porto-gestao > .cartao:nth-of-type(3n) { border-top-color: var(--dourado); }
+#painel-porto-gestao > .cartao > .lista > li {
+  margin-bottom: var(--espaco-sm);
+  padding: var(--espaco-md);
+  border: 1px solid rgb(11 61 92 / 15%);
+  border-top: 4px solid var(--verde);
+  border-radius: 12px;
+  background: rgb(75 174 159 / 9%);
+}
+#painel-porto-gestao > .cartao > .lista > li:nth-child(3n + 2) { border-top-color: var(--dourado); background: rgb(201 165 92 / 12%); }
+#painel-porto-gestao > .cartao > .lista > li:nth-child(3n) { border-top-color: var(--azul-medio); background: rgb(31 92 122 / 7%); }
+#painel-porto-gestao .botao.secundario:hover { background: #fff; }
+#painel-porto-gestao fieldset.campo { margin: 0; padding: 0; border: 0; }
+
 @media (pointer: coarse) {
   .botao { min-height: 44px; }
+  .aba-painel-porto { min-height: 48px; }
 }
 
 @media (max-width: 540px) {
@@ -485,6 +619,8 @@ a.ethos-navegacao-item:hover { background: #f3f8f8; border-color: var(--azul-med
   main.conteudo { width: min(100% - 32px, 960px); }
   main.central { width: min(100% - 32px, 480px); margin-top: 36px; }
   .painel-cabecalho { align-items: flex-start; }
+  .abas-painel-lista { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--espaco-xs); }
+  .aba-painel-porto { min-width: 0; padding-inline: var(--espaco-sm); }
   .links { justify-content: flex-start; }
   .acoes-questionario { flex-direction: column-reverse; }
   .questionario-formulario .acoes-questionario > .botao { width: 100%; }
