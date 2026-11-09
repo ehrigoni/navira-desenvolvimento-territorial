@@ -19,7 +19,7 @@ function formatarNumero(valor: number) {
   return new Intl.NumberFormat("pt-BR").format(valor);
 }
 
-export function PainelImpacto({ dados, detalharIndices = false }: { dados: DadosImpacto; detalharIndices?: boolean }) {
+export function PainelImpacto({ dados, detalharIndices = true }: { dados: DadosImpacto; detalharIndices?: boolean }) {
   const metricas = [
     { titulo: "Pessoas cadastradas", valor: formatarNumero(dados.pessoasCadastradas), detalhe: "Navegantes registrados na plataforma" },
     { titulo: "Pessoas ativas", valor: formatarNumero(dados.pessoasAtivas), detalhe: "Contas de Navegante ativas" },
