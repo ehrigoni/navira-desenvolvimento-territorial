@@ -5,6 +5,7 @@ import { Modalidade, Prisma, StatusPorto, TipoPorto } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { detalhesVaga } from "@/lib/dados-porto";
+import { dataCalendario } from "@/lib/data";
 import { exigirSessao } from "@/lib/auth";
 import { sincronizarMatching } from "@/lib/sincronizar-matching";
 import { formatarFaixaSalarial } from "@/lib/matching";
@@ -103,11 +104,11 @@ export async function adicionarCursoRealizado(_: EstadoAcao, formData: FormData)
   if (!descricao) erros.descricao = "Descreva o conteúdo desenvolvido.";
   if (!Number.isInteger(cargaHoraria) || cargaHoraria < 1 || cargaHoraria > 5000) erros.cargaHoraria = "Informe a carga horária em horas.";
   if (!instituicao) erros.instituicao = "Informe a instituição de ensino.";
-  const data = /^\d{4}-\d{2}-\d{2}$/.test(dataTexto) ? new Date(`${dataTexto}T00:00:00Z`) : null;
-  if (!data || Number.isNaN(data.getTime())) erros.dataRealizacao = "Informe a data de realização.";
+  const data = dataCalendario(dataTexto);
+  if (!data) erros.dataRealizacao = "Informe uma data de realização válida (DD/MM/AAAA).";
   else if (data.getTime() > Date.now()) erros.dataRealizacao = "A data não pode estar no futuro.";
   if (!modalidade) erros.modalidade = "Escolha a modalidade.";
-  if (Object.keys(erros).length) return { erros };
+  if (Object.keys(erros).length || !data) return { erros };
 
   try {
     await db.cursoRealizado.create({
@@ -118,7 +119,7 @@ export async function adicionarCursoRealizado(_: EstadoAcao, formData: FormData)
         descricao,
         cargaHoraria,
         instituicao,
-        dataRealizacao: data!,
+        dataRealizacao: data,
         modalidade,
       },
     });
@@ -300,18 +301,15 @@ export async function escolherCurso(formData: FormData) {
   revalidatePath("/navegante");
 }
 
-/** Coloca o navegante na lista de apoiadores de uma iniciativa de um dos seus portos (ou tira). */
-export async function alternarApoioIniciativaNavegante(formData: FormData) {
+export async function deixarApoioIniciativaNavegante(formData: FormData) {
   const naveganteId = await navegantePorSessao();
   const iniciativaId = texto(formData, "iniciativaId");
   const iniciativa = await db.iniciativaPorto.findFirst({
     where: { id: iniciativaId, status: "ABERTO", Porto: { inscritos: { some: { naveganteId } } } },
     select: { id: true },
   });
-  if (iniciativa) {
-    const removido = await db.apoioIniciativa.deleteMany({ where: { iniciativaId, naveganteId } });
-    if (removido.count === 0) await db.apoioIniciativa.create({ data: { iniciativaId, naveganteId } });
-  }
+  if (!iniciativa) throw new Error("Iniciativa indisponível para alterar o apoio.");
+  await db.apoioIniciativa.deleteMany({ where: { iniciativaId, naveganteId } });
   revalidatePath("/navegante");
   revalidatePath("/porto");
 }

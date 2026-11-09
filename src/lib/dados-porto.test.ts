@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cnpjValido, dataCalendario, detalhesVaga } from "./dados-porto";
+import { cnpjValido, detalhesVaga } from "./dados-porto";
+import { dataCalendario, mascararData } from "./data";
 import { descricaoCnae } from "./cnae";
 
 test("valida CNPJ com e sem máscara e rejeita dígitos inválidos", () => {
@@ -15,6 +16,17 @@ test("valida datas reais e aceita campos opcionais", () => {
   assert.equal(dataCalendario("2024-02-29")?.toString(), new Date("2024-02-29T00:00:00Z").toString());
   assert.equal(dataCalendario("2026-02-29"), false);
   assert.equal(dataCalendario("2026-13-01"), false);
+  assert.equal(dataCalendario("29/02/2024")?.toString(), new Date("2024-02-29T00:00:00Z").toString());
+  for (const invalida of ["29/02/2026", "31/04/2024", "01/13/2026", "1/01/2026", "01/01/20", "01-01-2026"]) {
+    assert.equal(dataCalendario(invalida), false);
+  }
+});
+
+test("formata digitação e colagem de datas", () => {
+  assert.equal(mascararData("1"), "1");
+  assert.equal(mascararData("120"), "12/0");
+  assert.equal(mascararData("12032026"), "12/03/2026");
+  assert.equal(mascararData("12/03/202699"), "12/03/2026");
 });
 
 test("interpreta detalhes de vaga sem alterar registros antigos", () => {

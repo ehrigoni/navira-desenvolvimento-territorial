@@ -34,6 +34,16 @@ No painel do Porto, a busca adiciona portos a uma lista persistente de possívei
 
 O cadastro de cursos aceita período e vagas disponíveis opcionais. As vagas podem informar requisitos, expectativas, benefícios e cursos exigidos; sua publicação não consome crédito, mas a escolha de um candidato exige um crédito disponível.
 
+Os campos de data dos cursos e iniciativas usam o formato DD/MM/AAAA, com máscara durante a digitação. Datas inválidas são rejeitadas; os períodos informados devem respeitar a ordem de início e término.
+
+Na aba Membros, o Porto consulta os Navegantes que se vincularam a ele e a data do vínculo. Antes da escolha para contratação, somente o primeiro nome é exibido; os contatos seguem as regras da contratação. Membros sem candidatura também aparecem como potenciais candidatos, mas não podem ser escolhidos até se candidatarem a uma vaga do Porto.
+
+Nas iniciativas dos painéis de Porto e Navegante, o botão com a categoria abre e fecha as necessidades e metas. O Porto responsável pode adicionar metas de colaboração com tipo e unidade livres, como dinheiro em reais ou roupas em peças. Outros Portos e Navegantes vinculados podem declarar a quantidade que desejam para cada meta; a declaração registra automaticamente o apoio. O responsável confirma ou recusa cada contribuição, inclusive após encerrar a iniciativa. Apenas contribuições confirmadas contam para a meta. É possível deixar de apoiar; os registros permanecem no histórico. A declaração não realiza pagamento nem comprova entrega; a confirmação depende de verificação pelo Porto responsável.
+
+Novas iniciativas podem ser cadastradas como voluntariado, mutirão ou evento. Cursos e vagas de emprego são publicados nas respectivas seções; iniciativas anteriores dessas categorias permanecem disponíveis no histórico.
+
+Antes de disponibilizar as metas em outro ambiente, aplique [prisma/atualizar-colaboracoes.sql](prisma/atualizar-colaboracoes.sql) ao banco correspondente; o comando `npm run db:atualizar-porto` também inclui essa migração. Não publique a versão nova antes de atualizar o banco de destino.
+
 ### Administração
 
 Administradores podem entrar em `/admin` ou pela tela de login geral, usando uma conta administrativa separada. Na tela `/admin`, a solicitação de cadastro não exige convite e fica inativa até que um administrador existente a aprove no painel. O sistema não verifica a posse do telefone ou e-mail: confirme a identidade do solicitante por um canal confiável antes de aprovar. O fluxo anterior de convites está desativado. Cada acesso e operação administrativa verifica se a conta continua ativa. Após cinco tentativas inválidas, a conta administrativa é bloqueada por 15 minutos. Administradores criados diretamente pelo painel precisam trocar a senha no primeiro acesso. Novos cadastros de Porto aguardam aprovação; registros anteriores permanecem com o acesso que tinham. A suspensão bloqueia novas operações e o acesso ao painel, sem apagar dados ou históricos.

@@ -1,21 +1,19 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState } from "react";
 import { adicionarCursoRealizado, type EstadoAcao } from "./actions";
+import DataInput from "../DataInput";
+import { useFormularioComValidacao } from "../useFormularioComValidacao";
 
 const inicial: EstadoAcao = {};
 
 export default function FormularioCursoRealizado() {
   const [estado, acao, pendente] = useActionState(adicionarCursoRealizado, inicial);
-  const formulario = useRef<HTMLFormElement>(null);
+  const { formulario, enviar } = useFormularioComValidacao(acao, estado);
   const e = estado.erros ?? {};
 
-  useEffect(() => {
-    if (estado.sucesso) formulario.current?.reset();
-  }, [estado.sucesso]);
-
   return (
-    <form ref={formulario} action={acao} className="formulario" noValidate>
+    <form ref={formulario} action={acao} onSubmit={enviar} className="formulario" noValidate>
       {estado.erro && <p className="alerta erro" role="alert">{estado.erro}</p>}
       {estado.sucesso && <p className="alerta" role="status">{estado.sucesso}</p>}
 
@@ -45,7 +43,7 @@ export default function FormularioCursoRealizado() {
 
       <div className={`campo ${e.dataRealizacao ? "invalido" : ""}`}>
         <label htmlFor="curso-data">Data de realização</label>
-        <input id="curso-data" name="dataRealizacao" type="date" />
+        <DataInput id="curso-data" name="dataRealizacao" invalid={Boolean(e.dataRealizacao)} />
         {e.dataRealizacao && <p className="erro-campo">{e.dataRealizacao}</p>}
       </div>
 

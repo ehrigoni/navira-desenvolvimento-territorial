@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { CategoriaIniciativa, TipoPagamentoPorto } from "@prisma/client";
+import { TipoPagamentoPorto } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
@@ -9,19 +9,19 @@ import { exigirSessao } from "@/lib/auth";
 import { confirmarPagamentoPorto } from "@/lib/pagamento-porto";
 import { transferirCreditosPorto } from "@/lib/creditos-porto";
 import { encerrarContratacao, selecionarCandidato } from "@/lib/contratacao-porto";
-import { cnpjValido, dataCalendario } from "@/lib/dados-porto";
+import { cnpjValido } from "@/lib/dados-porto";
+import { dataCalendario } from "@/lib/data";
 import { apenasDigitos } from "@/lib/validacao";
 import { sincronizarMatching } from "@/lib/sincronizar-matching";
 import { descricaoCnae } from "@/lib/cnae";
 import {
   MODALIDADES_FORMULARIO,
+  categoriaIniciativaCadastravel,
   VALOR_COTA_APOIO_CENTAVOS,
   VALOR_CREDITO_CONTRATACAO_CENTAVOS,
 } from "@/lib/porto-regras";
 
 export type EstadoAcao = { erro?: string; erros?: Record<string, string>; sucesso?: string };
-
-const CATEGORIAS: CategoriaIniciativa[] = ["CURSO", "VAGA_EMPREGO", "VOLUNTARIADO", "MUTIRAO", "EVENTO"];
 
 function texto(formData: FormData, chave: string) {
   const valor = formData.get(chave);
@@ -233,8 +233,8 @@ export async function publicarCurso(_: EstadoAcao, formData: FormData): Promise<
   if (cargaHoraria === undefined || !Number.isInteger(cargaHoraria) || cargaHoraria < 1 || cargaHoraria > 5000) erros.cargaHoraria = "Informe a carga horária em horas.";
   if (!instituicaoEnsino) erros.instituicaoEnsino = "Informe a instituição que oferece o curso.";
   if (!modalidade) erros.modalidade = "Escolha a modalidade.";
-  if (inicio === false) erros.inicio = "Data de início inválida.";
-  if (termino === false) erros.termino = "Data de término inválida.";
+  if (inicio === false) erros.inicio = "Informe uma data de início válida (DD/MM/AAAA).";
+  if (termino === false) erros.termino = "Informe uma data de término válida (DD/MM/AAAA).";
   if (inicio && termino && termino < inicio) erros.termino = "O término não pode ser antes do início.";
   if (vagasDisponiveis !== undefined && (!Number.isInteger(vagasDisponiveis) || vagasDisponiveis < 1 || vagasDisponiveis > 1_000_000)) {
     erros.vagasDisponiveis = "Informe uma quantidade entre 1 e 1.000.000.";
@@ -276,7 +276,7 @@ export async function removerCursoPorto(formData: FormData) {
 
 export async function publicarIniciativa(_: EstadoAcao, formData: FormData): Promise<EstadoAcao> {
   const porto = await portoPorSessao();
-  const categoria = texto(formData, "categoria") as CategoriaIniciativa;
+  const categoria = texto(formData, "categoria");
   const titulo = texto(formData, "titulo");
   const descricao = texto(formData, "descricao");
   const modalidade = MODALIDADES_FORMULARIO[texto(formData, "modalidade")];
@@ -285,15 +285,15 @@ export async function publicarIniciativa(_: EstadoAcao, formData: FormData): Pro
   const termino = data(formData, "termino");
 
   const erros: Record<string, string> = {};
-  if (!CATEGORIAS.includes(categoria)) erros.categoria = "Escolha a categoria.";
+  if (!categoriaIniciativaCadastravel(categoria)) erros.categoria = "Escolha uma categoria disponível.";
   if (!titulo) erros.titulo = "Informe o título da iniciativa.";
   if (!descricao) erros.descricao = "Descreva a iniciativa.";
   if (!modalidade) erros.modalidade = "Escolha a modalidade.";
   if (vagasTotais !== undefined && (!Number.isInteger(vagasTotais) || vagasTotais < 1)) erros.vagasTotais = "Informe um número de vagas válido.";
-  if (inicio === false) erros.inicio = "Data de início inválida.";
-  if (termino === false) erros.termino = "Data de término inválida.";
+  if (inicio === false) erros.inicio = "Informe uma data de início válida (DD/MM/AAAA).";
+  if (termino === false) erros.termino = "Informe uma data de término válida (DD/MM/AAAA).";
   if (inicio && termino && termino < inicio) erros.termino = "O término não pode ser antes do início.";
-  if (Object.keys(erros).length) return { erros };
+  if (Object.keys(erros).length || !categoriaIniciativaCadastravel(categoria)) return { erros };
 
   try {
     await db.iniciativaPorto.create({
@@ -332,18 +332,15 @@ export async function alternarIniciativaPorto(formData: FormData) {
   atualizarPainel();
 }
 
-/** Coloca o porto na lista de apoiadores de uma iniciativa de outro porto (ou tira). */
-export async function alternarApoioIniciativaPorto(formData: FormData) {
+export async function deixarApoioIniciativaPorto(formData: FormData) {
   const porto = await portoPorSessao();
   const iniciativaId = texto(formData, "iniciativaId");
   const iniciativa = await db.iniciativaPorto.findFirst({
     where: { id: iniciativaId, status: "ABERTO", portoId: { not: porto.id } },
     select: { id: true },
   });
-  if (iniciativa) {
-    const removido = await db.apoioIniciativa.deleteMany({ where: { iniciativaId, portoId: porto.id } });
-    if (removido.count === 0) await db.apoioIniciativa.create({ data: { iniciativaId, portoId: porto.id } });
-  }
+  if (!iniciativa) throw new Error("Iniciativa indisponível para alterar o apoio.");
+  await db.apoioIniciativa.deleteMany({ where: { iniciativaId, portoId: porto.id } });
   atualizarPainel();
 }
 

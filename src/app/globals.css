@@ -444,9 +444,13 @@ a.ethos-navegacao-item:hover { background: #f3f8f8; border-color: var(--azul-med
 .lista li strong { color: var(--azul); }
 .lista li[role="option"] { cursor: pointer; }
 .iniciativa-cabecalho { display: flex; align-items: center; flex-wrap: wrap; gap: var(--espaco-sm); }
-.iniciativa-cabecalho > strong { overflow-wrap: anywhere; }
+.iniciativa-cabecalho > strong { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
 .iniciativa-cabecalho > form { margin: 0; }
 .iniciativa-cabecalho > .tag { margin-left: 0; }
+.iniciativa-expandir { border: 1px solid var(--sucesso); font-family: inherit; cursor: pointer; }
+.iniciativa-expandir:hover, .iniciativa-expandir[aria-expanded="true"] { background: var(--sucesso); color: var(--branco); }
+.metas-colaboracao { margin: var(--espaco-md) 0; }
+.meta-colaboracao { margin: var(--espaco-sm) 0; padding: var(--espaco-sm); border-left: 3px solid var(--verde); }
 .form-remover-porto { display: inline; margin: 0 0 0 var(--espaco-xs); }
 .botao-x {
   width: 24px;
@@ -658,15 +662,9 @@ a.ethos-navegacao-item:hover { background: #f3f8f8; border-color: var(--azul-med
 .painel-vagas .botao:not(.secundario), .painel-cursos .botao:not(.secundario) { background: var(--azul); color: var(--branco); }
 .painel-vagas .tag, .painel-cursos .tag { background: var(--branco); color: var(--tinta); }
 
-/* Cursos realizados e o formulário de cadastro, na mesma cor (azul médio da marca). */
-.painel-realizados { background: var(--azul-medio); border-color: var(--azul-medio); }
-.painel-realizados, .painel-realizados h2, .painel-realizados h3, .painel-realizados p,
-.painel-realizados .lista li, .painel-realizados .lista li strong, .painel-realizados .campo label,
-.painel-realizados .ajuda, .painel-realizados .vazio, .painel-realizados a { color: var(--branco); }
-.painel-realizados .lista li { border-top-color: rgb(247 247 245 / 25%); }
-.painel-realizados .campo input, .painel-realizados .campo select, .painel-realizados .campo textarea { color: var(--tinta); }
-.painel-realizados .botao:not(.secundario) { background: var(--branco); color: var(--azul); }
-.painel-realizados .botao.secundario { background: var(--branco); color: var(--azul); border-color: var(--branco); }
+.painel-portos .alerta.erro, .painel-cursos .alerta.erro { color: var(--erro); }
+.painel-portos .alerta.sucesso { color: var(--sucesso); }
+.painel-cursos .erro-campo { color: var(--erro); }
 
 /* Painel do porto: ações lado a lado e formulários de uma linha (cotas). */
 .acoes-porto { display: flex; flex-wrap: wrap; gap: var(--espaco-sm); margin-top: var(--espaco-sm); }

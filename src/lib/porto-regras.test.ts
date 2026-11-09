@@ -1,8 +1,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { assinaturaAtiva, proximoVencimentoAssinatura } from "./porto-regras";
+import { assinaturaAtiva, proximoVencimentoAssinatura, CATEGORIAS_INICIATIVA_CADASTRO, CATEGORIA_INICIATIVA_ROTULO, categoriaIniciativaCadastravel } from "./porto-regras";
 
 const agora = new Date("2026-11-08T12:00:00Z");
+
+test("categorias para novas iniciativas excluem cursos e vagas, preservando os rótulos históricos", () => {
+  assert.deepEqual(CATEGORIAS_INICIATIVA_CADASTRO, ["VOLUNTARIADO", "MUTIRAO", "EVENTO"]);
+  for (const categoria of CATEGORIAS_INICIATIVA_CADASTRO) assert.equal(categoriaIniciativaCadastravel(categoria), true);
+  assert.equal(categoriaIniciativaCadastravel("VAGA_EMPREGO"), false);
+  assert.equal(categoriaIniciativaCadastravel("CURSO"), false);
+  assert.equal(categoriaIniciativaCadastravel(""), false);
+  assert.equal(CATEGORIA_INICIATIVA_ROTULO.VAGA_EMPREGO, "vaga de emprego");
+  assert.equal(CATEGORIA_INICIATIVA_ROTULO.CURSO, "curso");
+});
 
 test("assinatura sem data ou vencida não está ativa", () => {
   assert.equal(assinaturaAtiva({ assinaturaAteEm: null }, agora), false);

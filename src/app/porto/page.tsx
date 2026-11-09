@@ -13,9 +13,12 @@ import FormDadosPorto from "./FormDadosPorto";
 import AbasPainelPorto from "./AbasPainelPorto";
 import { detalhesVaga } from "@/lib/dados-porto";
 import { municipioComMaisVagas } from "@/lib/impacto";
+import { incluirMetasColaboracao } from "@/lib/consulta-colaboracoes";
+import MetasColaboracao from "../colaboracoes/MetasColaboracao";
+import IniciativaRecolhivel from "../colaboracoes/IniciativaRecolhivel";
 import { listarCandidatosPorto, visivelAoPorto } from "@/lib/contratacao-porto";
 import {
-  alternarApoioIniciativaPorto,
+  deixarApoioIniciativaPorto,
   alternarIniciativaPorto,
   alternarVagaPorto,
   comprarCotas,
@@ -77,7 +80,7 @@ export default async function PainelPorto({
   const ativa = assinaturaAtiva(porto, agora);
   const naoEhMeu = { OR: [{ portoId: null }, { portoId: { not: porto.id } }] };
 
-  const [minhasVagas, regiaoVagas, meusCursos, regiaoCursos, minhasIniciativas, outrasIniciativas, apadrinhamentos, pagamentos, candidatos, pessoasCadastradas, pessoasAtivas, vagasPublicadas, vagasAtivas, contratacoesRegistradas, contratacoesAtivas, cursosConcluidos, parceriasApadrinhamento, vagasComTerritorio, cursosParaVaga] = await Promise.all([
+  const [minhasVagas, regiaoVagas, meusCursos, regiaoCursos, minhasIniciativas, outrasIniciativas, apadrinhamentos, pagamentos, candidatos, pessoasCadastradas, pessoasAtivas, vagasPublicadas, vagasAtivas, contratacoesRegistradas, contratacoesAtivas, cursosConcluidos, parceriasApadrinhamento, vagasComTerritorio, cursosParaVaga, membros] = await Promise.all([
     db.vaga.findMany({
       where: { portoId: porto.id },
       include: {
@@ -124,6 +127,7 @@ export default async function PainelPorto({
     db.iniciativaPorto.findMany({
       where: { portoId: porto.id },
       include: {
+        metasColaboracao: incluirMetasColaboracao(porto.id),
         _count: { select: { ApoioIniciativa: true } },
         ApoioIniciativa: {
           where: { OR: [{ naveganteId: null }, { Navegante: visivelAoPorto(porto.id) }] },
@@ -138,6 +142,7 @@ export default async function PainelPorto({
     db.iniciativaPorto.findMany({
       where: { status: "ABERTO", portoId: { not: porto.id } },
       include: {
+        metasColaboracao: incluirMetasColaboracao(),
         Porto: { select: { nome: true } },
         ApoioIniciativa: { where: { portoId: porto.id }, select: { id: true } },
       },
@@ -172,6 +177,11 @@ export default async function PainelPorto({
       },
     }),
     db.curso.findMany({ select: { id: true, nome: true, instituicaoEnsino: true }, orderBy: { nome: "asc" } }),
+    db.inscricaoPorto.findMany({
+      where: { portoId: porto.id },
+      select: { naveganteId: true, criadaEm: true, navegante: { select: { nomeSocial: true, usuario: { select: { nome: true } } } } },
+      orderBy: { criadaEm: "desc" },
+    }),
   ]);
 
   const municipioDestaque = municipioComMaisVagas(vagasComTerritorio);
@@ -185,14 +195,22 @@ export default async function PainelPorto({
             {porto.tipo?.toLowerCase() ?? "porto"} · {porto.cidade ?? "—"}/{porto.uf ?? "—"} · CEP {porto.cep ?? "—"}
           </p>
         </div>
-        <form action="/sair" method="post">
-          <button className="botao botao-sair" type="submit">
-            Sair
-          </button>
-        </form>
       </header>
 
       <AbasPainelPorto
+        membros={<section className="cartao">
+          <h2>Membros do Porto</h2>
+          <p className="ajuda">Navegantes vinculados ao Porto. Os contatos são disponibilizados após a escolha para contratação e permanecem sujeitos às regras de privacidade.</p>
+          {membros.length === 0 ? <p className="vazio">Nenhum membro vinculado.</p> : <ul className="lista">{membros.map((membro) => {
+            const candidato = candidatos.find((c) => c.id === membro.naveganteId);
+            return <li key={membro.naveganteId}>
+              <strong>{candidato?.contatos?.nome ?? (membro.navegante.nomeSocial ?? membro.navegante.usuario.nome).trim().split(/\s+/)[0]}</strong>
+              <p className="ajuda">Vinculado em {membro.criadaEm.toLocaleDateString("pt-BR", { timeZone: "UTC" })}</p>
+              {candidato?.contatos ? <p>Telefone: {candidato.contatos.telefone} · E-mail: {candidato.contatos.email ?? "não informado"}</p> : <p className="ajuda">Contato disponível após a escolha para contratação.</p>}
+              {!candidato?.vinculo && <p className="ajuda">Para contratação, o membro precisa se candidatar a uma vaga do Porto.</p>}
+            </li>;
+          })}</ul>}
+        </section>}
         formularioDados={<FormDadosPorto porto={{
           nome: porto.nome, razaoSocial: porto.razaoSocial, cnpj: porto.cnpj, cnae: porto.cnae,
           cep: porto.cep, logradouro: porto.logradouro, numero: porto.numero, complemento: porto.complemento,
@@ -238,11 +256,13 @@ export default async function PainelPorto({
         <h2>Candidatos às vagas do porto</h2>
         <p className="ajuda">Antes da escolha, somente o primeiro nome e os cursos concluídos são exibidos. Escolher um candidato custa uma cota e libera os contatos, sem ressarcimento caso a contratação não tenha sucesso.</p>
         <h3>Potenciais candidatos</h3>
-        {candidatos.filter((c) => !c.vinculo && c.vagas.length > 0).length === 0 && <p className="vazio">Nenhum candidato disponível.</p>}
+        {candidatos.filter((c) => !c.vinculo && (c.vagas.length > 0 || c.membro)).length === 0 && <p className="vazio">Nenhum candidato disponível.</p>}
         <ul className="lista">
-          {candidatos.filter((c) => !c.vinculo && c.vagas.length > 0).map((candidato) => (
+          {candidatos.filter((c) => !c.vinculo && (c.vagas.length > 0 || c.membro)).map((candidato) => (
             <li key={candidato.id}>
               <strong>{candidato.nome}</strong>
+              {candidato.membro && <span className="tag">Membro</span>}
+              {candidato.vagas.length === 0 && <p className="ajuda">Ainda não se candidatou a uma vaga deste Porto.</p>}
               {candidato.cursos.length ? (
                 <ul>{candidato.cursos.map((curso, indice) => <li key={indice}>{curso.curso} · {curso.instituicao} · {curso.cargaHoraria}h</li>)}</ul>
               ) : <p className="ajuda">Nenhum curso concluído informado.</p>}
@@ -286,11 +306,11 @@ export default async function PainelPorto({
             </li>
           ))}
         </ul>
-        {candidatos.some((c) => !c.vinculo && c.vagas.length === 0 && c.contatos) && (
+        {candidatos.some((c) => !c.vinculo && !c.membro && c.vagas.length === 0 && c.contatos) && (
           <div>
             <h3>Contatos de vínculos encerrados</h3>
             <p className="ajuda">Estes navegantes não estão na lista de potenciais candidatos. Os contatos permanecem disponíveis até uma nova contratação por outro porto.</p>
-            {candidatos.filter((c) => !c.vinculo && c.vagas.length === 0 && c.contatos).map((c) => (
+            {candidatos.filter((c) => !c.vinculo && !c.membro && c.vagas.length === 0 && c.contatos).map((c) => (
               <p key={c.id}>{c.contatos!.nome} · {c.contatos!.telefone} · {c.contatos!.email ?? "e-mail não informado"}</p>
             ))}
           </div>
@@ -414,14 +434,14 @@ export default async function PainelPorto({
           <ul className="lista">
             {minhasIniciativas.map((iniciativa) => (
               <li key={iniciativa.id}>
-                <strong>{iniciativa.titulo}</strong>{" "}
-                <span className="tag">{CATEGORIA_INICIATIVA_ROTULO[iniciativa.categoria]}</span>{" "}
+                <IniciativaRecolhivel titulo={iniciativa.titulo} categoria={CATEGORIA_INICIATIVA_ROTULO[iniciativa.categoria]}>
                 <span className="tag">{iniciativa.status === "ABERTO" ? "aberta" : iniciativa.status.toLowerCase()}</span>
                 <div className="ajuda">
                   {MODALIDADE_ROTULO[iniciativa.modalidade] ?? iniciativa.modalidade.toLowerCase()}
                   {iniciativa.vagasTotais ? ` · ${iniciativa.vagasTotais} vagas` : ""}
                 </div>
                 <p className="descricao-vaga">{iniciativa.descricao}</p>
+                <MetasColaboracao metas={iniciativa.metasColaboracao} iniciativaId={iniciativa.id} proprietario aberta={iniciativa.status === "ABERTO"} papel="PORTO" />
                 <form action={alternarIniciativaPorto}>
                   <input type="hidden" name="iniciativaId" value={iniciativa.id} />
                   <button className="botao secundario" type="submit">
@@ -441,6 +461,7 @@ export default async function PainelPorto({
                     ))}
                   </ul>
                 )}
+                </IniciativaRecolhivel>
               </li>
             ))}
           </ul>
@@ -454,17 +475,15 @@ export default async function PainelPorto({
               const apoiada = iniciativa.ApoioIniciativa.length > 0;
               return (
                 <li key={iniciativa.id}>
-                  <div className="iniciativa-cabecalho">
-                    <strong>{iniciativa.titulo}</strong>
-                    <form action={alternarApoioIniciativaPorto}>
-                      <input type="hidden" name="iniciativaId" value={iniciativa.id} />
-                      <button className={apoiada ? "botao secundario" : "botao"} type="submit">
-                        {apoiada ? "Deixar de apoiar" : "Apoiar iniciativa"}
-                      </button>
-                    </form>
-                    <span className="tag">{CATEGORIA_INICIATIVA_ROTULO[iniciativa.categoria]}</span>
-                  </div>
+                  <IniciativaRecolhivel titulo={iniciativa.titulo} categoria={CATEGORIA_INICIATIVA_ROTULO[iniciativa.categoria]}>
                   <div className="ajuda">{iniciativa.Porto.nome} · {MODALIDADE_ROTULO[iniciativa.modalidade] ?? iniciativa.modalidade.toLowerCase()}</div>
+                  <p className="descricao-vaga">{iniciativa.descricao}</p>
+                  <MetasColaboracao metas={iniciativa.metasColaboracao} iniciativaId={iniciativa.id} apoiadorId={porto.id} papel="PORTO" />
+                  {apoiada && <form action={deixarApoioIniciativaPorto}>
+                    <input type="hidden" name="iniciativaId" value={iniciativa.id} />
+                    <button className="botao secundario" type="submit">Deixar de apoiar</button>
+                  </form>}
+                  </IniciativaRecolhivel>
                 </li>
               );
             })}

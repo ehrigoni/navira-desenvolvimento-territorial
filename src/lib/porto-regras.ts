@@ -24,6 +24,12 @@ export const CATEGORIA_INICIATIVA_ROTULO: Record<CategoriaIniciativa, string> = 
   EVENTO: "evento",
 };
 
+export const CATEGORIAS_INICIATIVA_CADASTRO: readonly CategoriaIniciativa[] = ["VOLUNTARIADO", "MUTIRAO", "EVENTO"];
+
+export function categoriaIniciativaCadastravel(valor: string): valor is CategoriaIniciativa {
+  return CATEGORIAS_INICIATIVA_CADASTRO.some((categoria) => categoria === valor);
+}
+
 /** A assinatura vale até a data registrada no porto (1 ano a cada pagamento). */
 export function assinaturaAtiva(porto: { assinaturaAteEm: Date | null }, agora = new Date()) {
   return !!porto.assinaturaAteEm && porto.assinaturaAteEm.getTime() > agora.getTime();

@@ -33,6 +33,19 @@ describe("escolha exclusiva e privacidade de candidatos", { skip: !process.env.D
     await db.$disconnect();
   });
 
+  it("lista membros sem candidatura, mas não permite escolhê-los sem candidatura à vaga", async () => {
+    const porto = await criarPorto();
+    const n = await criarCandidato();
+    const vaga = await db.vaga.create({ data: { portoId: porto.id, titulo: "Vaga para membro", descricao: "Teste", beneficios: [] } });
+    await db.inscricaoPorto.create({ data: { portoId: porto.id, naveganteId: n } });
+    const membro = (await listarCandidatosPorto(porto.id)).find((c) => c.id === n);
+    assert.ok(membro?.membro);
+    assert.equal(membro.contatos, null);
+    assert.equal(membro.vagas.length, 0);
+    assert.equal(await selecionarCandidato(porto.id, vaga.id, n), "sem-candidato");
+    assert.equal((await db.porto.findUniqueOrThrow({ where: { id: porto.id } })).creditosContratacao, 5);
+  });
+
   it("preserva os demais candidatos, protege contatos e permite retirar candidaturas sem vínculo", async () => {
     const a = await criarPorto();
     const b = await criarPorto();

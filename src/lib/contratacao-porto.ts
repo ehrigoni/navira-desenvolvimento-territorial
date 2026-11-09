@@ -79,11 +79,12 @@ export async function listarCandidatosPorto(portoId: string, agora = new Date())
       AND: [
         visivelAoPorto(portoId),
         { usuario: { ativo: true } },
-        { OR: [{ vagas: { some: { vaga: { portoId } } } }, { Contratacao: { some: { portoId } } }] },
+        { OR: [{ vagas: { some: { vaga: { portoId } } } }, { Contratacao: { some: { portoId } } }, { portos: { some: { portoId } } }] },
       ],
     },
     select: {
       id: true, nomeSocial: true, usuario: { select: { nome: true } },
+      portos: { where: { portoId }, select: { portoId: true } },
       CursoRealizado: { select: { curso: true, instituicao: true, cargaHoraria: true }, orderBy: { dataRealizacao: "desc" } },
       vagas: { where: { vaga: { portoId } }, select: { vaga: { select: { id: true, titulo: true, ativa: true } } } },
       Contratacao: { orderBy: [{ criadaEm: "desc" }, { id: "desc" }], select: { id: true, portoId: true, criadaEm: true, encerradaEm: true, Vaga: { select: { titulo: true } } } },
@@ -101,6 +102,7 @@ export async function listarCandidatosPorto(portoId: string, agora = new Date())
     const ultimo = c.Contratacao[0];
     return {
       id: c.id,
+      membro: c.portos.length > 0,
       nome: (c.nomeSocial ?? c.usuario.nome).trim().split(/\s+/)[0],
       cursos: c.CursoRealizado,
       vagas: c.vagas.map((v) => v.vaga),

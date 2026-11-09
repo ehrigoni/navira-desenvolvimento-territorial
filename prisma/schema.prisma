@@ -51,6 +51,7 @@ model Navegante {
   Contratacao         Contratacao[]
   portos              InscricaoPorto[]
   MatchingNavegante   MatchingNavegante?
+  contribuicoes       ContribuicaoIniciativa[]
   usuario             Usuario               @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   RespostaEthos       RespostaEthos[]
   SnapshotNavegante   SnapshotNavegante[]
@@ -130,6 +131,7 @@ model Porto {
   apadrinhadoComo     Apadrinhamento[]    @relation("Afilhado")
   pagamentosPorto     PagamentoPorto[]    @relation("PagadorPorto")
   pagamentosRecebidos PagamentoPorto[]    @relation("AfilhadoPagamento")
+  contribuicoes       ContribuicaoIniciativa[]
 
   @@index([cidade, uf])
   @@index([cep])
@@ -439,8 +441,39 @@ model IniciativaPorto {
   Porto               Porto                 @relation(fields: [portoId], references: [id], onDelete: Cascade)
   InscricaoIniciativa InscricaoIniciativa[]
   ApoioIniciativa     ApoioIniciativa[]
+  metasColaboracao    MetaColaboracao[]
 
   @@index([categoria, status])
+  @@index([portoId])
+}
+
+model MetaColaboracao {
+  id              String                    @id @default(cuid())
+  iniciativaId    String
+  tipo            String
+  unidade         String
+  meta            Decimal                   @db.Decimal(12, 2)
+  iniciativa      IniciativaPorto           @relation(fields: [iniciativaId], references: [id], onDelete: Cascade)
+  contribuicoes   ContribuicaoIniciativa[]
+
+  @@index([iniciativaId])
+}
+
+model ContribuicaoIniciativa {
+  id           String           @id @default(cuid())
+  metaId       String
+  naveganteId  String?
+  portoId      String?
+  quantidade   Decimal          @db.Decimal(12, 2)
+  status       String           @default("PENDENTE")
+  criadaEm     DateTime         @default(now())
+  decididaEm   DateTime?
+  meta         MetaColaboracao  @relation(fields: [metaId], references: [id], onDelete: Cascade)
+  navegante    Navegante?       @relation(fields: [naveganteId], references: [id], onDelete: SetNull)
+  porto        Porto?           @relation(fields: [portoId], references: [id], onDelete: SetNull)
+
+  @@index([metaId, status])
+  @@index([naveganteId])
   @@index([portoId])
 }
 

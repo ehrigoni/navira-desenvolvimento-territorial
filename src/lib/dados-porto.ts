@@ -12,13 +12,6 @@ export function cnpjValido(cnpj: string): boolean {
   return Number(numeros[12]) === primeiro && Number(numeros[13]) === segundo;
 }
 
-export function dataCalendario(valor: string): Date | null | false {
-  if (!valor) return null;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(valor)) return false;
-  const data = new Date(`${valor}T00:00:00.000Z`);
-  return Number.isNaN(data.getTime()) || data.toISOString().slice(0, 10) !== valor ? false : data;
-}
-
 export function detalhesVaga(requisitos: unknown) {
   if (!requisitos || typeof requisitos !== "object" || Array.isArray(requisitos)) return { requisitos: "", expectativas: "" };
   const dados = requisitos as Record<string, unknown>;

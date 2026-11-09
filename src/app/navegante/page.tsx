@@ -5,11 +5,14 @@ import { exigirSessao } from "@/lib/auth";
 import { calcularIndiceLocal, formatarFaixaSalarial } from "@/lib/matching";
 import { CATEGORIA_INICIATIVA_ROTULO } from "@/lib/porto-regras";
 import { detalhesVaga } from "@/lib/dados-porto";
+import { incluirMetasColaboracao } from "@/lib/consulta-colaboracoes";
+import MetasColaboracao from "../colaboracoes/MetasColaboracao";
+import IniciativaRecolhivel from "../colaboracoes/IniciativaRecolhivel";
 import BuscaPorto from "./BuscaPorto";
 import BuscaEscolha from "./BuscaEscolha";
 import FormularioCursoRealizado from "./FormularioCursoRealizado";
 import {
-  alternarApoioIniciativaNavegante,
+  deixarApoioIniciativaNavegante,
   buscarCursos,
   buscarVagas,
   escolherCurso,
@@ -138,6 +141,7 @@ export default async function PainelNavegante({
   const iniciativas = portos.length === 0 ? [] : await db.iniciativaPorto.findMany({
     where: { status: "ABERTO", portoId: { in: portos.map((p) => p.id) } },
     include: {
+      metasColaboracao: incluirMetasColaboracao(),
       Porto: { select: { nome: true } },
       _count: { select: { ApoioIniciativa: true } },
       ApoioIniciativa: { where: { naveganteId: navegante.id }, select: { id: true } },
@@ -155,9 +159,6 @@ export default async function PainelNavegante({
           <h1>Meus Portos</h1>
           <p className="subtitulo">Olá, {sessao.nome.split(" ")[0]}. Seu painel de portos, vagas e cursos.</p>
         </div>
-        <form action="/sair" method="post">
-          <button className="botao botao-sair" type="submit">Sair</button>
-        </form>
       </header>
 
       {aviso === "vinculo-ativo" && <p className="alerta erro" role="alert">Você possui vínculo ativo com um porto e não pode alterar suas candidaturas.</p>}
@@ -193,6 +194,35 @@ export default async function PainelNavegante({
         )}
         <h3>Adicionar porto</h3>
         <BuscaPorto />
+        <section id="iniciativas">
+          <h3>Iniciativas dos meus portos</h3>
+          <p className="ajuda">Abra uma iniciativa para consultar suas necessidades e colaborar.</p>
+          {iniciativas.length === 0 ? (
+            <p className="vazio">Nenhuma iniciativa aberta nos seus portos.</p>
+          ) : (
+            <ul className="lista">
+              {iniciativas.map((iniciativa) => {
+                const apoiada = iniciativa.ApoioIniciativa.length > 0;
+                return (
+                  <li key={iniciativa.id}>
+                    <IniciativaRecolhivel titulo={iniciativa.titulo} categoria={CATEGORIA_INICIATIVA_ROTULO[iniciativa.categoria]}>
+                      <div className="ajuda">
+                        {iniciativa.Porto.nome} · {MODALIDADE_ROTULO[iniciativa.modalidade] ?? iniciativa.modalidade.toLowerCase()}
+                        {" · "}{iniciativa._count.ApoioIniciativa} apoiador(es)
+                      </div>
+                      <p className="descricao-vaga">{iniciativa.descricao}</p>
+                      <MetasColaboracao metas={iniciativa.metasColaboracao} iniciativaId={iniciativa.id} apoiadorId={navegante.id} papel="NAVEGANTE" />
+                      {apoiada && <form action={deixarApoioIniciativaNavegante}>
+                        <input type="hidden" name="iniciativaId" value={iniciativa.id} />
+                        <button className="botao secundario" type="submit">Deixar de apoiar</button>
+                      </form>}
+                    </IniciativaRecolhivel>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
       </section>
 
       <section className="cartao painel-vagas">
@@ -290,77 +320,43 @@ export default async function PainelNavegante({
             ))}
           </ul>
         )}
-      </section>
-
-      <section className="cartao" id="iniciativas">
-        <h2>Iniciativas dos meus portos</h2>
-        <p className="ajuda">Ao apoiar uma iniciativa, você entra na lista de potenciais apoiadores do porto.</p>
-        {iniciativas.length === 0 ? (
-          <p className="vazio">Nenhuma iniciativa aberta nos seus portos.</p>
-        ) : (
-          <ul className="lista">
-            {iniciativas.map((iniciativa) => {
-              const apoiada = iniciativa.ApoioIniciativa.length > 0;
-              return (
-                <li key={iniciativa.id}>
-                  <div className="iniciativa-cabecalho">
-                    <strong>{iniciativa.titulo}</strong>
-                    <form action={alternarApoioIniciativaNavegante}>
-                      <input type="hidden" name="iniciativaId" value={iniciativa.id} />
-                      <button className={apoiada ? "botao secundario" : "botao"} type="submit">
-                        {apoiada ? "Deixar de apoiar" : "Apoiar iniciativa"}
-                      </button>
-                    </form>
-                    <span className="tag">{CATEGORIA_INICIATIVA_ROTULO[iniciativa.categoria]}</span>
-                  </div>
-                  <div className="ajuda">
-                    {iniciativa.Porto.nome} · {MODALIDADE_ROTULO[iniciativa.modalidade] ?? iniciativa.modalidade.toLowerCase()}
-                    {" · "}{iniciativa._count.ApoioIniciativa} apoiador(es)
-                  </div>
-                  <p className="descricao-vaga">{iniciativa.descricao}</p>
+        <section id="cursos-realizados">
+          <h3>Cursos realizados</h3>
+          {navegante.CursoRealizado.length === 0 ? (
+            <p className="vazio">Você ainda não registrou cursos realizados.</p>
+          ) : (
+            <ul className="lista">
+              {navegante.CursoRealizado.map((curso) => (
+                <li key={curso.id}>
+                  <strong>{curso.curso}</strong>{" "}
+                  <span className="ajuda">
+                    · {curso.instituicao} · {curso.cargaHoraria}h · {MODALIDADE_ROTULO[curso.modalidade ?? ""] ?? "modalidade não informada"}
+                    {" · "}{curso.dataRealizacao.toLocaleDateString("pt-BR", { timeZone: "UTC" })}
+                  </span>
+                  <p className="descricao-vaga">{curso.descricao}</p>
+                  <form action={removerCursoRealizado}>
+                    <input type="hidden" name="cursoRealizadoId" value={curso.id} />
+                    <button className="botao secundario" type="submit">Remover</button>
+                  </form>
                 </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-
-      <section className="cartao painel-realizados" id="cursos-realizados">
-        <h2>Cursos realizados</h2>
-        {navegante.CursoRealizado.length === 0 ? (
-          <p className="vazio">Você ainda não registrou cursos realizados.</p>
-        ) : (
-          <ul className="lista">
-            {navegante.CursoRealizado.map((curso) => (
-              <li key={curso.id}>
-                <strong>{curso.curso}</strong>{" "}
-                <span className="ajuda">
-                  · {curso.instituicao} · {curso.cargaHoraria}h · {MODALIDADE_ROTULO[curso.modalidade ?? ""] ?? "modalidade não informada"}
-                  {" · "}{curso.dataRealizacao.toLocaleDateString("pt-BR", { timeZone: "UTC" })}
-                </span>
-                <p className="descricao-vaga">{curso.descricao}</p>
-                <form action={removerCursoRealizado}>
-                  <input type="hidden" name="cursoRealizadoId" value={curso.id} />
-                  <button className="botao secundario" type="submit">Remover</button>
-                </form>
-              </li>
-            ))}
-          </ul>
-        )}
-        {!mostrarFormularioCurso && (
-          <p>
-            <Link className="botao" href="/navegante?incluir=curso#cursos-realizados">Incluir curso</Link>
-          </p>
-        )}
-        {mostrarFormularioCurso && (
-          <>
-            <h3>Registrar curso realizado</h3>
-            <FormularioCursoRealizado />
+              ))}
+            </ul>
+          )}
+          {!mostrarFormularioCurso && (
             <p>
-              <Link href="/navegante#cursos-realizados">Cancelar</Link>
+              <Link className="botao" href="/navegante?incluir=curso#cursos-realizados">Incluir curso</Link>
             </p>
-          </>
-        )}
+          )}
+          {mostrarFormularioCurso && (
+            <>
+              <h4>Registrar curso realizado</h4>
+              <FormularioCursoRealizado />
+              <p>
+                <Link href="/navegante#cursos-realizados">Cancelar</Link>
+              </p>
+            </>
+          )}
+        </section>
       </section>
     </main>
   );

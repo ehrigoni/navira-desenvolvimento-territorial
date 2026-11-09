@@ -1,21 +1,20 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState } from "react";
 import { publicarIniciativa, type EstadoAcao } from "./actions";
+import DataInput from "../DataInput";
+import { useFormularioComValidacao } from "../useFormularioComValidacao";
+import { CATEGORIAS_INICIATIVA_CADASTRO, CATEGORIA_INICIATIVA_ROTULO } from "@/lib/porto-regras";
 
 const inicial: EstadoAcao = {};
 
 export default function FormIniciativaPorto() {
   const [estado, acao, pendente] = useActionState(publicarIniciativa, inicial);
-  const formulario = useRef<HTMLFormElement>(null);
+  const { formulario, enviar } = useFormularioComValidacao(acao, estado);
   const e = estado.erros ?? {};
 
-  useEffect(() => {
-    if (estado.sucesso) formulario.current?.reset();
-  }, [estado.sucesso]);
-
   return (
-    <form ref={formulario} action={acao} className="formulario" noValidate>
+    <form ref={formulario} action={acao} onSubmit={enviar} className="formulario" noValidate>
       {estado.erro && <p className="alerta erro" role="alert">{estado.erro}</p>}
       {estado.sucesso && <p className="alerta sucesso" role="status">{estado.sucesso}</p>}
 
@@ -23,11 +22,10 @@ export default function FormIniciativaPorto() {
         <label htmlFor="iniciativa-categoria">Categoria</label>
         <select id="iniciativa-categoria" name="categoria" defaultValue="">
           <option value="" disabled>Selecione</option>
-          <option value="CURSO">Curso</option>
-          <option value="VAGA_EMPREGO">Vaga de emprego</option>
-          <option value="VOLUNTARIADO">Voluntariado</option>
-          <option value="MUTIRAO">Mutirão</option>
-          <option value="EVENTO">Evento</option>
+          {CATEGORIAS_INICIATIVA_CADASTRO.map((categoria) => {
+            const rotulo = CATEGORIA_INICIATIVA_ROTULO[categoria];
+            return <option key={categoria} value={categoria}>{rotulo[0].toUpperCase() + rotulo.slice(1)}</option>;
+          })}
         </select>
         {e.categoria && <p className="erro-campo">{e.categoria}</p>}
       </div>
@@ -63,9 +61,9 @@ export default function FormIniciativaPorto() {
 
       <div className={`campo ${e.inicio || e.termino ? "invalido" : ""}`}>
         <label htmlFor="iniciativa-inicio">Início (opcional)</label>
-        <input id="iniciativa-inicio" name="inicio" type="date" />
+        <DataInput id="iniciativa-inicio" name="inicio" invalid={Boolean(e.inicio)} />
         <label htmlFor="iniciativa-termino">Término (opcional)</label>
-        <input id="iniciativa-termino" name="termino" type="date" />
+        <DataInput id="iniciativa-termino" name="termino" invalid={Boolean(e.termino)} />
         {(e.inicio || e.termino) && <p className="erro-campo">{e.inicio ?? e.termino}</p>}
       </div>
 

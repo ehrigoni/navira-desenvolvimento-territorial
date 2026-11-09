@@ -1,21 +1,19 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState } from "react";
 import { publicarCurso, type EstadoAcao } from "./actions";
+import DataInput from "../DataInput";
+import { useFormularioComValidacao } from "../useFormularioComValidacao";
 
 const inicial: EstadoAcao = {};
 
 export default function FormCursoPorto() {
   const [estado, acao, pendente] = useActionState(publicarCurso, inicial);
-  const formulario = useRef<HTMLFormElement>(null);
+  const { formulario, enviar } = useFormularioComValidacao(acao, estado);
   const e = estado.erros ?? {};
 
-  useEffect(() => {
-    if (estado.sucesso) formulario.current?.reset();
-  }, [estado.sucesso]);
-
   return (
-    <form ref={formulario} action={acao} className="formulario" noValidate>
+    <form ref={formulario} action={acao} onSubmit={enviar} className="formulario" noValidate>
       {estado.erro && <p className="alerta erro" role="alert">{estado.erro}</p>}
       {estado.sucesso && <p className="alerta sucesso" role="status">{estado.sucesso}</p>}
 
@@ -55,10 +53,10 @@ export default function FormCursoPorto() {
 
       <div className={`campo ${e.inicio || e.termino ? "invalido" : ""}`}>
         <label htmlFor="curso-porto-inicio">Data de início (opcional)</label>
-        <input id="curso-porto-inicio" name="inicio" type="date" />
+        <DataInput id="curso-porto-inicio" name="inicio" invalid={Boolean(e.inicio)} />
         {e.inicio && <p className="erro-campo">{e.inicio}</p>}
         <label htmlFor="curso-porto-termino">Data de término (opcional)</label>
-        <input id="curso-porto-termino" name="termino" type="date" />
+        <DataInput id="curso-porto-termino" name="termino" invalid={Boolean(e.termino)} />
         {e.termino && <p className="erro-campo">{e.termino}</p>}
       </div>
 
